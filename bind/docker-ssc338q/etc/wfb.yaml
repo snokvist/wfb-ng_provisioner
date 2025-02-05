@@ -1,0 +1,16 @@
+wireless:
+  txpower: 1
+  channel: 140
+  mode: HT20
+broadcast:
+  wfb_index: 3
+  tun_index: 1
+  fec_k: 8
+  fec_n: 12
+  link_id: 7669206
+telemetry:
+  router: msposd
+  serial: /dev/ttyS2
+  osd_fps: 20
+common:
+  passphrase: openipc
