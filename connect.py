@@ -53,6 +53,44 @@ def compute_checksums(directory):
             checksum_lines.append(f"{sha1_hash}  {rel_path}")
     return checksum_lines
 
+def send_rate_limited(sock_file, data, bw_limit, progress=False):
+    """
+    Send data using the given file-like object with bandwidth limiting.
+    
+    Parameters:
+      sock_file: The socket’s file-like object (opened in binary mode)
+      data: The data (as bytes) to send.
+      bw_limit: The bandwidth limit in bits per second.
+      progress: If True, display a simple progress bar on stdout.
+    """
+    # Convert bits per second to bytes per second.
+    bw_bytes_per_sec = bw_limit / 8.0
+    chunk_size = 4096  # You can adjust the chunk size if desired.
+    total = len(data)
+    sent = 0
+    start_time = time.time()
+    while sent < total:
+        end = min(sent + chunk_size, total)
+        chunk = data[sent:end]
+        sock_file.write(chunk)
+        sock_file.flush()
+        sent += len(chunk)
+        # Rate limiting: if we have sent more than expected for the elapsed time, sleep.
+        elapsed = time.time() - start_time
+        expected = sent / bw_bytes_per_sec
+        if expected > elapsed:
+            time.sleep(expected - elapsed)
+        # Show a progress bar if enabled.
+        if progress:
+            percent = sent / total * 100
+            bar_length = 40
+            filled_length = int(round(bar_length * sent / total))
+            bar = '=' * filled_length + '-' * (bar_length - filled_length)
+            sys.stdout.write(f'\rProgress: [{bar}] {percent:6.2f}%')
+            sys.stdout.flush()
+    if progress:
+        sys.stdout.write('\n')
+
 def connect_to_server(host, port, max_retries, conn_timeout, op_timeout):
     """Connect to the server with retries; return the socket and its file-like wrapper."""
     sock = None
@@ -166,11 +204,10 @@ def bind_operation(folder_path, args):
         logging.debug(f"BIND operation: Archive base folder will be: '{archive_name}'")
         encoded_archive = prepare_archive(folder_path, archive_name)
         
-        # Send the BIND command with the encoded archive.
-        bind_message = f"BIND\t{encoded_archive}\n"
-        logging.debug("Sending BIND message with the archive.")
-        sock_file.write(bind_message.encode('utf-8'))
-        sock_file.flush()
+        # Prepare and send the BIND command with the encoded archive using rate limiting.
+        bind_message = f"BIND\t{encoded_archive}\n".encode('utf-8')
+        logging.debug("Sending BIND message with the archive (rate-limited).")
+        send_rate_limited(sock_file, bind_message, args.bw_limit, progress=True)
         
         # Wait for the final response.
         try:
@@ -213,7 +250,8 @@ def flash_operation(archive_file, args):
         sys.exit(1)
     
     encoded_archive = base64.b64encode(file_data).decode('utf-8')
-    logging.debug(f"FLASH operation: Read and base64-encoded file '{archive_file}' ({len(file_data)} bytes, {len(encoded_archive)} characters).")
+    logging.debug(f"FLASH operation: Read and base64-encoded file '{archive_file}' "
+                  f"({len(file_data)} bytes, {len(encoded_archive)} characters).")
     
     host = args.ip
     port = args.port
@@ -244,11 +282,10 @@ def flash_operation(archive_file, args):
             sys.exit(1)
         logging.debug(f"Server version: {version}")
 
-        # For FLASH, we send the archive as-is.
-        flash_message = f"FLASH\t{encoded_archive}\n"
-        logging.debug("Sending FLASH message with the archive file.")
-        sock_file.write(flash_message.encode('utf-8'))
-        sock_file.flush()
+        # Prepare and send the FLASH command with the encoded archive using rate limiting.
+        flash_message = f"FLASH\t{encoded_archive}\n".encode('utf-8')
+        logging.debug("Sending FLASH message with the archive file (rate-limited).")
+        send_rate_limited(sock_file, flash_message, args.bw_limit, progress=True)
         
         # Wait for the final response.
         try:
@@ -343,6 +380,8 @@ def main():
     parser.add_argument("--max-retries", "-r", type=int, default=30, help="Maximum number of connection retries (default: 30)")
     parser.add_argument("--timeout", "-t", type=int, default=60, help="Timeout (in seconds) for socket operations after connection (default: 60)")
     parser.add_argument("--conn-timeout", "-c", type=int, default=5, help="Timeout (in seconds) for each connection attempt (default: 5)")
+    parser.add_argument("--bw-limit", type=int, default=2 * 1024 * 1024,
+                        help="Bandwidth limit in bits per second (default: 2 Mbit/s)")
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -390,4 +429,3 @@ if __name__ == "__main__":
         datefmt='%H:%M:%S'
     )
     main()
-

@@ -96,8 +96,8 @@ elif [ "$MODE" = "rx-tx" ]; then
   # Placeholder for combined RX-TX logic
   echo "Configuring '$WLAN_INTERFACE' for BIND mode..."
   iw dev "$WLAN_INTERFACE" set channel 165 HT20
-  wfb_rx -p 127 -u 5800 -l 5000 -K files/bind.key -i 10531917 "$WLAN_INTERFACE" &
-  wfb_tx -p 255 -u 5801 -l 5000 -K files/bind.key -M 1 -S 0 -L 0 -k 1 -n 2 -i 10531917 "$WLAN_INTERFACE" &
+  wfb_rx -p 127 -u 5800 -l 5000 -K bind.key -i 10531917 "$WLAN_INTERFACE" &
+  wfb_tx -p 255 -u 5801 -l 5000 -K bind.key -M 1 -S 0 -L 0 -k 1 -n 2 -i 10531917 "$WLAN_INTERFACE" &
   wfb_tun -a 10.5.99.1/24 &
   #&> /dev/null
   if ! iw dev "$WLAN_INTERFACE" set txpower fixed "$TX_POWER"; then
