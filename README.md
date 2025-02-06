@@ -1,2 +1,2 @@
-### WFB-NG Provisioning for OpenIPC reference
+# WFB-NG Provisioning for OpenIPC reference
 
