@@ -59,12 +59,12 @@ wfb_tun -a 10.5.99.2/24 &
 sleep 4
 
 # ----------------------------------------------------------
-# Run drone_bind and capture its exit code
+# Run drone_provisioner and capture its exit code
 # ----------------------------------------------------------
-drone_bind --debug --listen-duration 30
+drone_provisioner --debug --listen-duration 30
 EXIT_CODE=$?
 
-echo "drone_bind exited with code $EXIT_CODE."
+echo "drone_provisioner exited with code $EXIT_CODE."
 
 # ----------------------------------------------------------
 # Handle exit codes
