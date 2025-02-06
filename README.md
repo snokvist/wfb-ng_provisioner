@@ -21,3 +21,6 @@ chmod +x all .py and .sh files.
 - #define EXIT_UNBIND 3
 - #define EXIT_FLASH  4
 - #define EXIT_BACKUP 5
+
+# Source
+https://github.com/svpcom/wfb-ng/wiki/Drone-auto-provisioning
