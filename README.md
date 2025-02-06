@@ -7,7 +7,7 @@ chmod +x all .py and .sh files.
 - sudo ./gs_provision.sh wlxc43cb0b7b1a2 info (Print out some info from drone)
 - sudo ./gs_provision.sh wlxc43cb0b7b1a2 version (Prints out a static version from drone)
 - sudo ./gs_provision.sh wlxc43cb0b7b1a2 bind bind/docker-ssc338q (Warning! This will copy the files from folder bind/docker-ssc338q to your drone and "provision" it according to bind instructions in bind.sh found on drone)
-- sudo ./gs_provision.sh wlxc43cb0b7b1a2 unbind (Will execute "firstbind" to restore the drone)
+- sudo ./gs_provision.sh wlxc43cb0b7b1a2 unbind (Will execute "firstboot" to restore the drone)
 - sudo ./gs_provision.sh wlxc43cb0b7b1a2 backup backup/ (Will send all files added to /etc/backup_these_files.txt as a tar.gz archive with sha1 checksums to the designated backup folder, with date and time as filename)
 
 ## Drone
