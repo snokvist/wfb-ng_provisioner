@@ -1,17 +1,52 @@
 #!/bin/bash
 # Usage:
-#   ./script.sh <wlan_mode> <operation> [optional_parameter]
+#   sudo ./script.sh <wlan_id> <operation> [optional_parameter]
+#
+# <wlan_id> is a required argument (e.g., "bind_mode", "flash_mode", "info_mode" etc.)
+# <operation> must be one of: bind, flash, info, version, unbind, backup
+# [optional_parameter] may be required for certain operations (e.g. bind folder, backup folder)
 #
 # Examples:
-#   ./script.sh bind_mode bind /path/to/bind_data_folder
-#   ./script.sh flash_mode flash
-#   ./script.sh info_mode info
-#   ./script.sh version_mode version
-#   ./script.sh unbind_mode unbind
-#   ./script.sh backup_mode backup /path/to/backup_folder
+#   sudo ./script.sh bind_mode bind /path/to/bind_data_folder
+#   sudo ./script.sh flash_mode flash
+#   sudo ./script.sh info_mode info
+#   sudo ./script.sh version_mode version
+#   sudo ./script.sh unbind_mode unbind
+#   sudo ./script.sh backup_mode backup /path/to/backup_folder
 
-# --- BEGIN TRAP-BASED CLEANUP ---
-# Define a cleanup function that will be called on EXIT (and optionally SIGINT, SIGTERM if desired).
+########################################
+# Usage/Help
+########################################
+usage() {
+    echo "Usage:"
+    echo "  $0 <wlan_id> <operation> [optional_parameter]"
+    echo
+    echo "Positional arguments:"
+    echo "  <wlan_id>        Required. For example: bind_mode, flash_mode, etc."
+    echo "  <operation>      One of: bind, flash, info, version, unbind, backup"
+    echo "  [optional_param] Required for 'bind' or 'backup', specifying a folder path."
+    echo
+    echo "Examples:"
+    echo "  sudo $0 bind_mode bind /path/to/bind_data_folder"
+    echo "  sudo $0 flash_mode flash"
+    echo "  sudo $0 info_mode info"
+    echo "  sudo $0 version_mode version"
+    echo "  sudo $0 unbind_mode unbind"
+    echo "  sudo $0 backup_mode backup /path/to/backup_folder"
+    exit 1
+}
+
+########################################
+# Check for root privileges
+########################################
+if [[ "$EUID" -ne 0 ]]; then
+    echo "Error: This script must be run with root privileges (try: sudo $0 ...)"
+    exit 1
+fi
+
+########################################
+# Trap-based cleanup
+########################################
 cleanup() {
     echo "Cleaning up background processes..."
     # If WFB_PID is set and the process is still running, gracefully kill it
@@ -21,72 +56,81 @@ cleanup() {
         wait "$WFB_PID"         # Wait until wfb-server actually stops
     fi
 }
-# Trap exit (and optionally signals) and call cleanup
 trap cleanup EXIT
-# --- END TRAP-BASED CLEANUP ---
 
-# Check that at least two arguments are provided
-if [ $# -lt 2 ]; then
-    echo "Usage: $0 <wlan_mode> <operation> [optional_parameter]"
-    exit 1
+########################################
+# Argument checks
+########################################
+if [[ $# -lt 2 ]]; then
+    echo "Error: Not enough arguments provided."
+    usage
 fi
 
 # Assign arguments
-wlan_mode=$1         # First argument: mode for wlan_init.sh
-operation=$2         # Second argument: determines which connect.py command to run
-optional_param=$3    # Third argument: used only for bind and backup operations (folder path)
+wlan_id="$1"         # First argument: used to pass to wfb-server
+operation="$2"       # Second argument: determines which connect.py command to run
+optional_param="$3"  # Third argument: used for bind or backup (folder path)
 
-# Start wfb-server in the background and store its PID
-# Adjust --profiles, --wlans, or any other arguments as needed
-echo "Starting wfb-server..."
-wfb-server --profiles bind_drone --wlans "$wlan_mode" &
+########################################
+# stop background wfb-ng services
+########################################
+systemctl stop wfb-cluster-node
+systemctl stop wfb-cluster-manager
+systemctl stop wifibroadcast@gs
+
+########################################
+# Start wfb-server bind_drone in the background
+########################################
+echo "Starting wfb-server drone_bind with wlan_id: $wlan_id"
+wfb-server --profiles bind_drone --wlans "$wlan_id" &
 WFB_PID=$!
 sleep 3  # Give wfb-server some time to come up
 
-# Execute the corresponding connect.py command based on the operation
+########################################
+# Perform operation using connect.py
+########################################
 case "$operation" in
     bind)
         # Require a bind data folder as an extra parameter
-        if [ -z "$optional_param" ]; then
-            echo "Usage for bind: $0 <wlan_mode> bind <bind_data_folder>"
-            exit 1
+        if [[ -z "$optional_param" ]]; then
+            echo "Error: For 'bind', an additional folder path is required."
+            usage
         fi
-        echo "Executing connect.py with --bind $optional_param"
+        echo "Executing connect.py --bind $optional_param"
         ./connect.py --bind "$optional_param"
         ;;
     flash)
-        echo "Executing connect.py with --flash flash/openipc.ssc338q-nor-fpv.tgz"
+        echo "Executing connect.py --flash flash/openipc.ssc338q-nor-fpv.tgz"
         ./connect.py --flash flash/openipc.ssc338q-nor-fpv.tgz
         ;;
     info)
-        echo "Executing connect.py with --info"
+        echo "Executing connect.py --info"
         ./connect.py --info
         ;;
     version)
-        echo "Executing connect.py with --version"
+        echo "Executing connect.py --version"
         ./connect.py --version
         ;;
     unbind)
-        echo "Executing connect.py with --unbind"
+        echo "Executing connect.py --unbind"
         ./connect.py --unbind
         ;;
     backup)
         # Require a backup folder path as an extra parameter
-        if [ -z "$optional_param" ]; then
-            echo "Usage for backup: $0 <wlan_mode> backup <backup_folder>"
-            exit 1
+        if [[ -z "$optional_param" ]]; then
+            echo "Error: For 'backup', an additional folder path is required."
+            usage
         fi
-        echo "Executing connect.py with --backup $optional_param"
+        echo "Executing connect.py --backup $optional_param"
         ./connect.py --backup "$optional_param"
         ;;
     *)
-        echo "Invalid operation: $operation. Valid operations are: bind, flash, info, version, unbind, or backup."
-        exit 1
+        echo "Error: Invalid operation '$operation'."
+        usage
         ;;
 esac
 
-# If you have any other cleanup steps (e.g. final_cleanup.sh), you can do them now:
+# Any other cleanup or final steps can go here:
 # ./final_cleanup.sh
 
-# By default the script exits here, triggering the cleanup trap function.
 exit 0
