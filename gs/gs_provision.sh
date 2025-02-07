@@ -22,8 +22,9 @@ operation=$2   # Second argument: determines which connect.py command to run
 optional_param=$3  # Third argument: used only for bind and backup operations (folder path)
 
 # Call wlan_init.sh with the provided mode
-echo "Calling wlan_init.sh with mode: $wlan_mode"
-./wlan_init.sh "$wlan_mode" 100 165 US HT20 bind &
+#echo "Calling wlan_init.sh with mode: $wlan_mode"
+#./wlan_init.sh "$wlan_mode" 100 165 US HT20 bind &
+wfb-server --profiles bind_drone --wlans "$wlan_mode"
 sleep 3
 
 # Execute the corresponding connect.py command based on the operation
