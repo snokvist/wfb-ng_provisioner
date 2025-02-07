@@ -3,7 +3,7 @@
 ## Groundstation
 git clone https://github.com/svpcom/wfb-ng.git
 
-make all_bins
+make all_bin
 
 copy wfb_tun to /usr/bin
 
