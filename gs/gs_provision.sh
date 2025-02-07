@@ -55,6 +55,8 @@ cleanup() {
         kill -TERM "$WFB_PID"   # Send SIGTERM for graceful shutdown
         wait "$WFB_PID"         # Wait until wfb-server actually stops
     fi
+    systemctl stop wifibroadcast@gs_bind
+    systemctl start wifibroadcast@gs
 }
 trap cleanup EXIT
 
@@ -77,12 +79,24 @@ optional_param="$3"  # Third argument: used for bind or backup (folder path)
 systemctl stop wfb-cluster-node
 systemctl stop wfb-cluster-manager
 systemctl stop wifibroadcast@gs
+systemctl stop wifibroadcast@gs_bind
+
+########################################
+# Create bind.key
+########################################
+if ! [ -f /etc/bind.key ]
+then
+    # Default bind key
+    echo "OoLVgEYyFofg9zdhfYPks8/L8fqWaF9Jk8aEnynFPsXNqhSpRCMbVKBFP4fCEOv5DGcbXmUHV5eSykAbFB70ew==" | base64 -d > /etc/bind.key
+fi
 
 ########################################
 # Start wfb-server bind_drone in the background
 ########################################
-echo "Starting wfb-server drone_bind with wlan_id: $wlan_id"
-wfb-server --profiles bind_drone --wlans "$wlan_id" &
+#echo "Starting wfb-server gs_bind with wlan_id: $wlan_id"
+echo "Starting wifibroadcast@gs_bind"
+#wfb-server --profiles gs_bind --wlans "$wlan_id" &
+systemctl start wifibroadcast@gs_bind
 WFB_PID=$!
 sleep 3  # Give wfb-server some time to come up
 
