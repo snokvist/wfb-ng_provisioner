@@ -1,6 +1,12 @@
 # WFB-NG Provisioning for OpenIPC reference
 
 ## Groundstation
+git clone https://github.com/svpcom/wfb-ng.git
+
+make all_bins
+
+copy wfb_tun to /usr/bin
+
 chmod +x all .py and .sh files.
 ### Command examples:
 - sudo ./gs_provision.sh wlxc43cb0b7b1a2 flash flash/openipc.ssc338q-nor-fpv.tgz (will send the tar.gz file to the drone, provisioner.sh on drone will enter a code block where you can add flash logic. Right now it will exit and cleanup to avoid headaches).
