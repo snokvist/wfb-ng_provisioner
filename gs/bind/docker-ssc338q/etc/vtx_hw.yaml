@@ -1,0 +1,12 @@
+vtx_id: ff00
+build_option: fpv
+soc: ssc338q
+wifi:
+  wifi_adapter: rtl8812au
+  max_bw: 40
+  min_bw: 20
+video:
+  sensor: imx335
+  max_bitrate: 28000
+  min_bitrate: 2800
+
