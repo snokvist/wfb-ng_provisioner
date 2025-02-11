@@ -1,0 +1,149 @@
+#!/bin/sh
+#
+# Enhanced script that:
+#  - Runs drone_provisioner in an infinite loop
+#  - Traps Ctrl+C (SIGINT) and other signals
+#  - Acts based on exit codes from drone_provisioner, including 5 for BACKUP
+
+# ----------------------------------------------------------
+# Trap signals for graceful shutdown
+# ----------------------------------------------------------
+trap "echo 'Received SIGINT (Ctrl+C). Exiting gracefully...'; exit 130" INT
+trap "echo 'Received SIGTERM. Exiting gracefully...'; exit 143" TERM
+# You can add more traps for other signals if desired:
+# trap "echo 'Received SIGHUP. Exiting gracefully...'; exit 129" HUP
+
+# ----------------------------------------------------------
+# Main loop
+# ----------------------------------------------------------
+while true; do
+  
+  # --------------------------------------------------------
+  # Run drone_provisioner and capture its exit code
+  # --------------------------------------------------------
+  drone_provisioner --ip 0.0.0.0 --listen-duration 9999
+  EXIT_CODE=$?
+
+  echo "drone_provisioner exited with code $EXIT_CODE."
+
+  # --------------------------------------------------------
+  # Handle exit codes
+  # --------------------------------------------------------
+  case $EXIT_CODE in
+    0)
+      echo "Listen period ended. Exiting with code 0."
+      exit 0
+      ;;
+
+    1)
+      echo "Fatal errors. Exiting with code 1."
+      exit 1
+      ;;
+
+    2)
+      echo "File received and saved successfully (BIND). Continuing execution..."
+      
+      cd /tmp/bind || exit 2
+      
+      # Decompress the .tar.gz
+      gunzip bind.tar.gz
+      
+      # Optional: validate that bind.tar now exists
+      if [ ! -f bind.tar ]; then
+          echo "ERR: bind.tar not found after gunzip."
+          exit 2
+      fi
+      
+      # Show what's in the tar (optional debug)
+      # tar -tvf bind.tar
+      
+      # Extract the tar
+      tar x -f bind.tar
+      
+      # Detect the top-level directory name (assuming exactly one)
+      extracted_dir="$(tar -tf bind.tar | head -n1 | cut -d/ -f1)"
+      
+      # Check that the directory exists
+      if [ -n "$extracted_dir" ] && [ -d "$extracted_dir" ]; then
+          cd "$extracted_dir" || exit 2
+          echo "Changed directory to: $extracted_dir"
+      else
+          echo "ERR: Could not identify a single top-level directory from bind.tar"
+          exit 2
+      fi
+      
+      # Validate checksums
+      if ! [ -f checksum.txt ] || ! sha1sum -c checksum.txt
+      then
+          echo "ERR: Checksum failed."
+          exit 2
+      fi
+
+      # -----------------------------------------------------
+      # Copy system files, as needed
+      # -----------------------------------------------------
+      if [ -f etc/wfb.yaml ]; then
+          cp etc/wfb.yaml /etc/wfb.yaml
+          echo "Copy success: /etc/wfb.yaml"
+      fi
+
+      if [ -d etc/sensors/ ]; then
+          cp etc/sensors/* /etc/sensors/
+          echo "Copy success: Sensor bins"
+      fi
+
+      if [ -f etc/majestic.yaml ]; then
+          cp etc/majestic.yaml /etc/majestic.yaml
+          /etc/init.d/S95majestic restart
+          echo "Copy & restart success: /etc/majestic.yaml"
+      fi
+
+      if [ -f lib/modules/4.9.84/sigmastar/sensor_imx335_mipi.ko ]; then
+          cp lib/modules/4.9.84/sigmastar/sensor_imx335_mipi.ko \
+             /lib/modules/4.9.84/sigmastar/sensor_imx335_mipi.ko
+          echo "Copy success (restart required): sensor_imx335_mipi.ko"
+      fi
+
+      if [ -f ./custom_script.sh ]; then
+          chmod +x ./custom_script.sh
+          ./custom_script.sh
+          echo "Copy success and executed: custom_script.sh"
+      fi
+
+      # Cleanup
+      rm -rf /tmp/bind
+      
+      # IMPORTANT: Continue the loop rather than exit the script
+      continue
+      ;;
+
+    3)
+      echo "UNBIND command received. Executing firstboot..."
+      firstboot
+      exit 3
+      ;;
+
+    4)
+      echo "FLASH command received. Exiting with code 4."
+      # (Insert your FLASH code here, if needed)
+      exit 4
+      ;;
+
+    5)
+      echo "BACKUP command received. Performing backup steps..."
+      # -----------------------------------------------------
+      # Insert your backup logic here
+      # (e.g., tar up certain directories, scp them somewhere, etc.)
+      # -----------------------------------------------------
+
+      echo "Backup completed. Continuing execution..."
+      continue
+      ;;
+
+    *)
+      echo "Unexpected error occurred. Exiting with code $EXIT_CODE."
+      exit "$EXIT_CODE"
+      ;;
+  esac
+
+done

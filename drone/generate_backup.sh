@@ -12,12 +12,13 @@
 # set -e
 
 # 1. Check input arguments
-if [ $# -lt 1 ]; then
-  echo "Usage: $0 <file_with_list_of_paths>"
-  exit 1
-fi
+#if [ $# -lt 1 ]; then
+#  echo "Usage: $0 <file_with_list_of_paths>"
+#  exit 1
+#fi
 
-FILE_LIST="$1"
+#FILE_LIST="$1"
+FILE_LIST="/etc/files_to_backup.txt"
 BACKUP_STAGING_DIR="/tmp/backup/staging"   # Where we'll copy all files
 CHECKSUM_FILE="$BACKUP_STAGING_DIR/checksum.txt"
 FINAL_BACKUP_DIR="/tmp/backup"
