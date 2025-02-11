@@ -17,11 +17,11 @@
  *        - 443
  *
  *    Inline list:
- *      ports_inline: [80, 443, 8080]
+ *      ports_inline: [80,443,8080]
  *
  * 3. Inline mappings
  *    Example:
- *      credentials: {user: admin, password: secret}
+ *      credentials: {user:admin,password:secret}
  *
  * 4. Block scalar literals (using the '|' notation)
  *    Example:
@@ -32,17 +32,21 @@
  * Command-line arguments:
  *    -i <file>          Specify the YAML file to parse.
  *    -g <key>           Get the value at the dot-separated key path.
- *    -s <key> <value>   Set the value at the dot-separated key path.
- *                       Missing nodes in the path are created.
+ *                       If the node is a container, its entire inline
+ *                       representation is printed (e.g. [1,2,3]).
+ *    -s <key> <value>   Set value at the dot-separated key path using inline style for lists.
+ *                       (e.g. -s list.key "[1,2,3]" saves the list inline)
+ *    -S <key> <value>   Set value at the dot-separated key path using dash notation for lists.
  *    -d <key>           Delete the node at the dot-separated key path.
  *
- * When using -s and -d, the changes are saved back to the file.
- * Leading dots in key paths (e.g. ".fpv.enabled") are allowed.
+ * When using -s/-S and -d, changes are saved back to the file.
+ * Leading dots (e.g. ".fpv.enabled") are allowed.
  *
  * Example usage:
  *    ./configurator -i config.yaml
  *    ./configurator -i config.yaml -g network.wifi.ssid
  *    ./configurator -i config.yaml -s credentials.password newsecret
+ *    ./configurator -i config.yaml -S list.key "[1,2,3,4]"   (dash notation for lists)
  *    ./configurator -i config.yaml -d network.ethernet
  */
 
@@ -65,6 +69,7 @@ typedef struct YAMLNode {
     YAMLNodeType type;
     struct YAMLNode **children;
     size_t num_children;
+    int force_inline;            /* For sequences: if nonzero, dump inline as [a,b,c] */
 } YAMLNode;
 
 YAMLNode *current_block_literal = NULL;
@@ -78,6 +83,7 @@ YAMLNode *create_node(const char *key, const char *value) {
     node->type = (value ? YAML_NODE_SCALAR : YAML_NODE_MAPPING);
     node->children = NULL;
     node->num_children = 0;
+    node->force_inline = 0;
     return node;
 }
 
@@ -98,9 +104,11 @@ void free_node(YAMLNode *node) {
     free(node);
 }
 
+/* Parse an inline sequence of the form "[item1,item2,...]". */
 YAMLNode *parse_inline_sequence(const char *str) {
     YAMLNode *node = create_node(NULL, NULL);
     node->type = YAML_NODE_SEQUENCE;
+    node->force_inline = 1;  /* Inline parsed list defaults to inline style */
     size_t len = strlen(str);
     if (len < 2) return node;
     char *inner = strndup(str + 1, len - 2);
@@ -119,7 +127,8 @@ YAMLNode *parse_inline_sequence(const char *str) {
     return node;
 }
 
-/* Improved inline mapping parser that does not split commas inside inline sequences. */
+/* Parse an inline mapping of the form "{key1:value1,key2:value2,...}".
+   This parser avoids splitting on commas that are inside inline sequences. */
 YAMLNode *parse_inline_mapping(const char *str) {
     YAMLNode *node = create_node(NULL, NULL);
     node->type = YAML_NODE_MAPPING;
@@ -130,11 +139,8 @@ YAMLNode *parse_inline_mapping(const char *str) {
     int token_start = 0, bracket_level = 0;
     for (int i = 0; i <= inner_len; i++) {
         char c = inner[i];
-        if (c == '[') {
-            bracket_level++;
-        } else if (c == ']') {
-            if (bracket_level > 0) bracket_level--;
-        }
+        if (c == '[') { bracket_level++; }
+        else if (c == ']') { if (bracket_level > 0) bracket_level--; }
         if ((c == ',' && bracket_level == 0) || c == '\0') {
             int token_len = i - token_start;
             if (token_len > 0) {
@@ -174,6 +180,40 @@ YAMLNode *parse_inline_mapping(const char *str) {
     return node;
 }
 
+/* Print a YAML node inline to a given file pointer.
+   Scalars print their value; sequences print as "[item,item,...]"; mappings as "{key:value,...}". */
+void print_inline_yaml(FILE *f, const YAMLNode *node) {
+    if (!node) return;
+    if (node->type == YAML_NODE_SCALAR) {
+        if (node->value)
+            fprintf(f, "%s", node->value);
+    } else if (node->type == YAML_NODE_SEQUENCE) {
+        fprintf(f, "[");
+        for (size_t i = 0; i < node->num_children; i++) {
+            print_inline_yaml(f, node->children[i]);
+            if (i < node->num_children - 1)
+                fprintf(f, ",");
+        }
+        fprintf(f, "]");
+    } else if (node->type == YAML_NODE_MAPPING) {
+        fprintf(f, "{");
+        for (size_t i = 0; i < node->num_children; i++) {
+            if (node->children[i]->key)
+                fprintf(f, "%s:", node->children[i]->key);
+            print_inline_yaml(f, node->children[i]);
+            if (i < node->num_children - 1)
+                fprintf(f, ",");
+        }
+        fprintf(f, "}");
+    }
+}
+
+/* Print inline representation to stdout (for -g). */
+void print_inline(const YAMLNode *node) {
+    print_inline_yaml(stdout, node);
+}
+
+/* Standard parse_line() that updates the in-memory tree from one line of YAML. */
 void parse_line(const char *line, int indent, YAMLNode *current_parent, int line_number) {
     if (line[0] == '-') {
         const char *value_start = line + 1;
@@ -348,6 +388,10 @@ int delete_node_at_path(YAMLNode *node, const char *path) {
     return 0;
 }
 
+/* Dump a YAML node to file.
+ * For a sequence: if force_inline is true, dump it inline ([a,b,c]);
+ * otherwise, dump using dash notation.
+ */
 void dump_yaml_node(FILE *f, const YAMLNode *node, int indent) {
     if (indent == 0 && node->key && strcmp(node->key, "root") == 0) {
         for (size_t i = 0; i < node->num_children; i++) {
@@ -374,6 +418,12 @@ void dump_yaml_node(FILE *f, const YAMLNode *node, int indent) {
         }
     }
     if (node->num_children > 0) {
+        if (node->type == YAML_NODE_SEQUENCE && node->force_inline) {
+            fprintf(f, " ");
+            print_inline_yaml(f, node);
+            fprintf(f, "\n");
+            return;
+        }
         fprintf(f, "\n");
         if (node->type == YAML_NODE_MAPPING) {
             for (size_t i = 0; i < node->num_children; i++) {
@@ -403,31 +453,19 @@ void save_yaml(const char *filename, const YAMLNode *root) {
     fclose(f);
 }
 
-void print_yaml(const YAMLNode *node, int depth) {
-    for (int i = 0; i < depth; i++) printf("  ");
-    if (node->key)
-        printf("%s: ", node->key);
-    if (node->value)
-        printf("%s", node->value);
-    if (node->num_children > 0)
-        printf(" {%s}", (node->type == YAML_NODE_SEQUENCE ? "sequence" : "mapping"));
-    printf("\n");
-    for (size_t i = 0; i < node->num_children; i++) {
-        print_yaml(node->children[i], depth + 1);
-    }
-}
-
 void handle_signal(int sig) {
     fprintf(stderr, "\nReceived signal %d, exiting gracefully...\n", sig);
     exit(EXIT_FAILURE);
 }
 
 void usage(const char *progname) {
-    fprintf(stderr, "Usage: %s -i <file> [ -g <key> | -s <key> <value> | -d <key> ]\n", progname);
+    fprintf(stderr, "Usage: %s -i <file> [ -g <key> | -s <key> <value> | -S <key> <value> | -d <key> ]\n", progname);
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -i <file>          YAML file to parse\n");
-    fprintf(stderr, "  -g <key>           Get value at the dot-separated key path\n");
-    fprintf(stderr, "  -s <key> <value>   Set value at the dot-separated key path (creates nested mappings if needed)\n");
+    fprintf(stderr, "  -g <key>           Get value at the dot-separated key path (outputs inline representation)\n");
+    fprintf(stderr, "  -s <key> <value>   Set value at the dot-separated key path using inline style for lists\n");
+    fprintf(stderr, "                     (e.g. -s list.key \"[1,2,3]\" saves the list inline)\n");
+    fprintf(stderr, "  -S <key> <value>   Set value at the dot-separated key path using dash notation for lists\n");
     fprintf(stderr, "  -d <key>           Delete node at the dot-separated key path\n");
     exit(EXIT_FAILURE);
 }
@@ -439,7 +477,8 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, handle_signal);
     char *filename = NULL, *get_path = NULL, *set_path = NULL, *set_value = NULL, *delete_path = NULL;
     int opt;
-    while ((opt = getopt(argc, argv, "i:g:s:d:")) != -1) {
+    int set_dash = 0; /* 0 = inline style (-s), 1 = dash notation (-S) */
+    while ((opt = getopt(argc, argv, "i:g:s:S:d:")) != -1) {
         switch (opt) {
             case 'i':
                 filename = optarg;
@@ -455,6 +494,17 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "Error: -s requires a key and a value.\n");
                     usage(argv[0]);
                 }
+                set_dash = 0;
+                break;
+            case 'S':
+                set_path = optarg;
+                if (optind < argc) {
+                    set_value = argv[optind++];
+                } else {
+                    fprintf(stderr, "Error: -S requires a key and a value.\n");
+                    usage(argv[0]);
+                }
+                set_dash = 1;
                 break;
             case 'd':
                 delete_path = optarg;
@@ -473,22 +523,56 @@ int main(int argc, char *argv[]) {
     root->type = YAML_NODE_MAPPING;
     parse_yaml(f, root);
     fclose(f);
+
     if (get_path) {
         YAMLNode *node = find_node(root, get_path);
         if (node) {
-            if (node->value)
-                printf("%s\n", node->value);
+            if (node->type == YAML_NODE_SCALAR && node->value)
+                printf("%s", node->value);
             else
-                print_yaml(node, 0);
+                print_inline(node);
         } else {
             printf("Node not found.\n");
         }
     } else if (set_path) {
         YAMLNode *node = find_or_create_node(root, set_path);
         if (node) {
-            if (node->value) free(node->value);
-            node->value = strdup(set_value);
-            node->type = YAML_NODE_SCALAR;
+            if (set_value[0] == '[') {
+                if (node->value) { free(node->value); node->value = NULL; }
+                for (size_t i = 0; i < node->num_children; i++) {
+                    free_node(node->children[i]);
+                }
+                free(node->children);
+                YAMLNode *new_list = parse_inline_sequence(set_value);
+                node->children = new_list->children;
+                node->num_children = new_list->num_children;
+                node->type = YAML_NODE_SEQUENCE;
+                node->force_inline = (set_dash ? 0 : 1);
+                new_list->children = NULL;
+                free(new_list);
+            } else if (set_value[0] == '{') {
+                if (node->value) { free(node->value); node->value = NULL; }
+                for (size_t i = 0; i < node->num_children; i++) {
+                    free_node(node->children[i]);
+                }
+                free(node->children);
+                YAMLNode *new_map = parse_inline_mapping(set_value);
+                node->children = new_map->children;
+                node->num_children = new_map->num_children;
+                node->type = YAML_NODE_MAPPING;
+                new_map->children = NULL;
+                free(new_map);
+            } else {
+                if (node->value) free(node->value);
+                for (size_t i = 0; i < node->num_children; i++) {
+                    free_node(node->children[i]);
+                }
+                free(node->children);
+                node->children = NULL;
+                node->num_children = 0;
+                node->value = strdup(set_value);
+                node->type = YAML_NODE_SCALAR;
+            }
             printf("Value set at '%s'.\n", set_path);
             save_yaml(filename, root);
             printf("Changes saved to file '%s'.\n", filename);
@@ -504,11 +588,7 @@ int main(int argc, char *argv[]) {
         } else {
             printf("Node '%s' not found.\n", delete_path);
         }
-    } else {
-        printf("YAML configuration parsed successfully. Dumping structure:\n");
-        print_yaml(root, 0);
     }
     free_node(root);
     return EXIT_SUCCESS;
 }
-
