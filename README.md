@@ -17,6 +17,7 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 - Setup wfb-ng to use/listen channel 165, until the full openipc-bind is implemented by wfb-ng.
 - Copy files from "drone" to drone folder structures. Apply chmod +x on /usr/bin and /etc/init.d/ files.
 - set your wifi profile with for example "fw_setenv wifi_profile bl-r8812af1". See /etc/wifi_profiles.yaml for valid wifi profiles.
+- reboot drone to generate the /etc/vtx_info.yaml, or run "generate_vtx_info.sh" manually. Check for /etc/vtx_info.yaml
 - run provision.sh for initiating the provisioner service to listen for provision commands on 0.0.0.0 port 5555 for 9999s
 - Go and run a provision command on groundstation, info or version are good to start with.
 ![image](https://github.com/user-attachments/assets/1a9d4826-eae6-4a45-9abb-089b07da9fe4)
