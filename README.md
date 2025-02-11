@@ -14,8 +14,8 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 
 ## Drone
 - Copy files from "drone" to drone folder structures. Apply chmod +x on /usr/bin files.
-- run provision.sh for initiating the provisioner service to listen for provision commands for 9999s
-- Go and run a provision command on groundstation.
+- run provision.sh for initiating the provisioner service to listen for provision commands on 0.0.0.0 port 5555 for 9999s
+- Go and run a provision command on groundstation, info or version are good to start with.
 
 ### drone_provisioner exit codes:
 - #define EXIT_ERR    1
