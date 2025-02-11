@@ -23,6 +23,7 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 ![image](https://github.com/user-attachments/assets/1a9d4826-eae6-4a45-9abb-089b07da9fe4)
 
 ### drone_provisioner exit codes:
+- #define EXIT_OK     0
 - #define EXIT_ERR    1
 - #define EXIT_BIND   2
 - #define EXIT_UNBIND 3
