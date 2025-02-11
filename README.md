@@ -1,26 +1,22 @@
 # WFB-NG Provisioning for OpenIPC reference
 
 ## Groundstation
-git clone https://github.com/svpcom/wfb-ng.git
+cd to gs/
+chmod +x *
 
-make all_bin
-
-copy wfb_tun to /usr/bin
-
-chmod +x all .py and .sh files.
 ### Command examples:
-- sudo ./gs_provision.sh wlxc43cb0b7b1a2 flash flash/openipc.ssc338q-nor-fpv.tgz (will send the tar.gz file to the drone, provisioner.sh on drone will enter a code block where you can add flash logic. Right now it will exit and cleanup to avoid headaches).
-- sudo ./gs_provision.sh wlxc43cb0b7b1a2 info (Print out some info from drone)
-- sudo ./gs_provision.sh wlxc43cb0b7b1a2 version (Prints out a static version from drone)
-- sudo ./gs_provision.sh wlxc43cb0b7b1a2 bind bind/docker-ssc338q (Warning! This will copy the files from folder bind/docker-ssc338q to your drone and "provision" it according to bind instructions in bind.sh found on drone)
-- sudo ./gs_provision.sh wlxc43cb0b7b1a2 unbind (Will execute "firstboot" to restore the drone)
-- sudo ./gs_provision.sh wlxc43cb0b7b1a2 backup backup/ (Will send all files added to /etc/backup_these_files.txt as a tar.gz archive with sha1 checksums to the designated backup folder, with date and time as filename)
+By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning. see --help for full command list.
+- connect.py --info
+- connect.py --version
+- connect.py --bind folder-containing-bind-files-to-send/
+- connect.py --unbind (will initiate firstboot on drone)
+- connect.py --backup backup-folder-to-store-backups/
 
 ## Drone
-- Copy files from "drone" to drone /usr/bin folder
-- chmod +x the files
-- run provision.sh for initiating the provisioner service to listen for provision commands for 30s
+- Copy files from "drone" to drone folder structures. Apply chmod +x on /usr/bin files.
+- run provision.sh for initiating the provisioner service to listen for provision commands for 9999s
 - Go and run a provision command on groundstation.
+
 ### drone_provisioner exit codes:
 - #define EXIT_ERR    1
 - #define EXIT_BIND   2
