@@ -1,6 +1,6 @@
 wireless:
   txpower: 1
-  channel: 140
+  channel: 165
   mode: HT20
 broadcast:
   wfb_index: 3
