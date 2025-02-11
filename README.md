@@ -1,7 +1,7 @@
 # WFB-NG Provisioning for OpenIPC reference
 
 ## Groundstation
-- Setup wfb-ng to use channel 165, until the full openipc-bind is implemented by wfb-ng.
+- Setup wfb-ng to use/listen channel 165, until the full openipc-bind is implemented by wfb-ng.
 - cd to gs/
 - chmod +x *
 
