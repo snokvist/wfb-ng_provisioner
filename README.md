@@ -1,8 +1,9 @@
 # WFB-NG Provisioning for OpenIPC reference
 
 ## Groundstation
-cd to gs/
-chmod +x *
+- Setup wfb-ng to use channel 165, until the full openipc-bind is implemented by wfb-ng.
+- cd to gs/
+- chmod +x *
 
 ### Command examples:
 By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning. see --help for full command list.
