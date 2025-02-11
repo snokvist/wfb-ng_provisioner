@@ -11,6 +11,5 @@
 #
 # By default this script does nothing.
 
-/etc/init.d/S98wifibroadcast bind
 
 exit 0
