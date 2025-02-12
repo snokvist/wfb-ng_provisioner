@@ -1,0 +1,6 @@
+profiles:
+all_profiles: [low_latency,default]
+  low_latency:
+    size: 1280x720
+  default:
+    size:
