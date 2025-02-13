@@ -151,7 +151,9 @@ while true; do
       ;;
   esac
   
+done
 rm -rf /tmp/flash
 rm -rf /tmp/bind
 rm -rf /tmp/backup
-done
+
+exit 0
