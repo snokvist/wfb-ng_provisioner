@@ -1,6 +1,23 @@
-profiles:
 all_profiles: [low_latency,default]
+profiles:
   low_latency:
-    size: 1280x720
-  default:
-    size:
+    video0:
+      size: 1280x720
+      bitrate: 8096
+      gopSize: 2
+    fps: 120
+      fpv:
+        enabled: true
+        noiseLevel: 0
+        refPred: true
+        refEnhance: 6
+  cinematic:
+    video0:
+      size:
+      bitrate: 16182
+      gopSize: 2
+    fps: 60
+      fpv:
+        enabled: true
+        noiseLevel: 1
+    default:
