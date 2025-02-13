@@ -4,8 +4,6 @@ all_profiles: [bl-r8812af1,bl-m8812eu2,bl-m8731bu4,default]
     bw: [5,10,20,40]
     stbc: [0,1]
     ldpc: [0,1]
-    fec_k: 8
-    fec_n: 12
     tx_power:
       mcs0: [1,5,10,15,20,25,30,35,40,45,50,55,60,63]
       mcs1: [1,5,10,15,20,25,30,35,40,45,50,55,60]
@@ -19,8 +17,6 @@ all_profiles: [bl-r8812af1,bl-m8812eu2,bl-m8731bu4,default]
     bw: [5,10,20]
     stbc: [0,1]
     ldpc: [0,1]
-    fec_k: 8
-    fec_n: 12
     tx_power:
       mcs0: [1,5,10,15,20,25,30,35,40,45,50,55,60,63]
       mcs1: [1,5,10,15,20,25,30,35,40,45,50,55,60]
@@ -34,8 +30,6 @@ all_profiles: [bl-r8812af1,bl-m8812eu2,bl-m8731bu4,default]
     bw: [5,10,20,40]
     stbc: [0]
     ldpc: [0]
-    fec_k: 8
-    fec_n: 12
     tx_power:
       mcs0: [1,5,10,15,20,25,30,35,40,45,50,55,60,63]
       mcs1: [1,5,10,15,20,25,30,35,40,45,50,55,60]
@@ -49,8 +43,6 @@ all_profiles: [bl-r8812af1,bl-m8812eu2,bl-m8731bu4,default]
     bw: [20]
     stbc: [0]
     ldpc: [0]
-    fec_k: 8
-    fec_n: 12
     tx_power:
       mcs0: [1,5,10]
       mcs1: [1,5,10]
