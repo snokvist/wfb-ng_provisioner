@@ -184,7 +184,7 @@ fi
 
 # Top-level keys.
 yaml-cli -i "$YAML_FILE" -s vtx_id "$vtx_id"
-yaml-cli -i "$YAML_FILE" -s vtx_name OpenIPC
+yaml-cli -i "$YAML_FILE" -s vtx_name $vtx_name
 yaml-cli -i "$YAML_FILE" -s build_option "$build_option"
 yaml-cli -i "$YAML_FILE" -s soc "$soc"
 
