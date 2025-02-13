@@ -82,6 +82,11 @@ while true; do
       # -----------------------------------------------------
       # Copy system files, as needed
       # -----------------------------------------------------
+      if [ -d overlay/ ]; then
+          cp -r overlay/* /
+          echo "Overlay files copied to root."
+      fi
+      
       if [ -f etc/wfb.yaml ]; then
           cp etc/wfb.yaml /etc/wfb.yaml
           echo "Copy success: /etc/wfb.yaml"
@@ -145,5 +150,8 @@ while true; do
       exit "$EXIT_CODE"
       ;;
   esac
-
+  
+rm -rf /tmp/flash
+rm -rf /tmp/bind
+rm -rf /tmp/backup
 done
