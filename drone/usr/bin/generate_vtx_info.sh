@@ -39,12 +39,20 @@ sensor=$(fw_printenv sensor 2>/dev/null | awk -F '=' '{print $2}')
 build_option=$(grep "^BUILD_OPTION=" /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '"')
 [ -z "$build_option" ] && build_option="fpv"
 
-# 5. wifi_profile: use fw_printenv wifi_profile; if not defined, leave empty.
+# 5. wifi_profile: use fw_printenv wifi_profile; if not defined, set default.
 wifi_profile_raw=$(fw_printenv wifi_profile 2>&1)
 if echo "$wifi_profile_raw" | grep -qi "not defined"; then
-  wifi_profile=""
+  wifi_profile="default"
 else
   wifi_profile=$(echo "$wifi_profile_raw" | awk -F '=' '{print $2}')
+fi
+
+# 5. vtx_name: use fw_printenv vtx_name:; if not defined, set default.
+vtx_name_raw=$(fw_printenv vtx_name 2>&1)
+if echo "$vtx_name_raw" | grep -qi "not defined"; then
+  vtx_name="default"
+else
+  vtx_name=$(echo "$vtx_name_raw" | awk -F '=' '{print $2}')
 fi
 
 ########################################
