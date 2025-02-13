@@ -14,7 +14,7 @@ cleanup() {
   rm -rf /tmp/flash
   rm -rf /tmp/bind
   rm -rf /tmp/backup
-}
+
 
 # ----------------------------------------------------------
 # Trap signals for graceful shutdown
@@ -94,7 +94,8 @@ while true; do
       # Copy system files, as needed
       # -----------------------------------------------------
       if [ -d overlay/ ]; then
-          cp -r overlay/* /
+      	  ls -la
+          cp -r overlay/root/* /
           echo "Overlay files copied to root."
       fi
       
