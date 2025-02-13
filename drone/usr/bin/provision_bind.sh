@@ -122,6 +122,14 @@ case $EXIT_CODE in
         # --------------------------------------------------
         # Copy system files, as needed
         # --------------------------------------------------
+        #If overlay folder exists, copy all its files
+        if [ -d overlay/ ]; then
+            cp -r overlay/* /
+            echo "Overlay files copied to root."
+        fi
+
+        #In addition, if there are SPECIFIC files exisisting in file system hierarchy
+        #they should overwrite the overlay files.
         if [ -f etc/wfb.yaml ]; then
             cp etc/wfb.yaml /etc/wfb.yaml
             echo "Copy success: /etc/wfb.yaml"
@@ -143,7 +151,8 @@ case $EXIT_CODE in
                /lib/modules/4.9.84/sigmastar/sensor_imx335_mipi.ko
             echo "Copy success (restart required): sensor_imx335_mipi.ko"
         fi
-
+        #Execute arbitrary commands, use with caution.
+        #If permanent changes are added with this, submit a PR instead
         if [ -f ./custom_script.sh ]; then
             chmod +x ./custom_script.sh
             ./custom_script.sh
