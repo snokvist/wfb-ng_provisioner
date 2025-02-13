@@ -176,9 +176,10 @@ fi
 
 # Top-level keys.
 yaml-cli -i "$YAML_FILE" -s vtx_id "$vtx_id"
+yaml-cli -i "$YAML_FILE" -s vtx_name OpenIPC
 yaml-cli -i "$YAML_FILE" -s build_option "$build_option"
 yaml-cli -i "$YAML_FILE" -s soc "$soc"
-yaml-cli -i "$YAML_FILE" -s name OpenIPC
+
 
 # Wi‑Fi section.
 yaml-cli -i "$YAML_FILE" -s wifi.wifi_adapter "$wifi_adapter"
