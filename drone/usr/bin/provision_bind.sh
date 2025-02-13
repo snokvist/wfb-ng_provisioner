@@ -57,8 +57,7 @@ wfb_tx -p 127 -u 5801 -K /etc/bind.key -M 1 -S 0 -L 0 \
     -k 1 -n 2 -i 10531917 wlan0 &> /dev/null &
 wfb_tun -a 10.5.99.2/24 &
 
-# Remain in WFB-NG bind for X sec
+# Sleep needed for wfb_tun to initialize
 sleep 15
 
-exit 0
-
+esac
