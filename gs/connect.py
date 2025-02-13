@@ -163,13 +163,22 @@ def get_info(args):
 # -------------------- Operation Functions --------------------
 
 def bind_operation(folder_path, args):
-    """Perform the BIND operation with checksum.txt included."""
+    """
+    Perform the BIND operation.
+    If folder_path is a file ending with .tar.gz, send it directly.
+    Otherwise, assume it's a folder, create a tar.gz archive with checksum.txt, and send it.
+    """
     host = args.ip
     port = args.port
     sock, sock_file = connect_to_server(host, port, args.max_retries, args.conn_timeout, args.timeout)
     try:
-        archive_name = os.path.basename(os.path.normpath(folder_path))
-        encoded_archive = base64.b64encode(create_tar_gz_archive(folder_path, archive_name)).decode('utf-8')
+        if os.path.isfile(folder_path) and folder_path.lower().endswith('.tar.gz'):
+            with open(folder_path, "rb") as f:
+                file_data = f.read()
+            encoded_archive = base64.b64encode(file_data).decode('utf-8')
+        else:
+            archive_name = os.path.basename(os.path.normpath(folder_path))
+            encoded_archive = base64.b64encode(create_tar_gz_archive(folder_path, archive_name)).decode('utf-8')
         bind_message = f"BIND\t{encoded_archive}\n".encode('utf-8')
         send_rate_limited(sock_file, bind_message, args.bw_limit, progress=True)
         response_line = sock_file.readline().decode('utf-8').strip()
