@@ -4,6 +4,17 @@
 #  - Runs drone_provisioner in an infinite loop
 #  - Traps Ctrl+C (SIGINT) and other signals
 #  - Acts based on exit codes from drone_provisioner, including 5 for BACKUP
+#  - Always runs cleanup steps on exit
+
+# ----------------------------------------------------------
+# Cleanup function (called on exit or signal)
+# ----------------------------------------------------------
+cleanup() {
+  echo "[CLEANUP] Removing temporary directories..."
+  rm -rf /tmp/flash
+  rm -rf /tmp/bind
+  rm -rf /tmp/backup
+}
 
 # ----------------------------------------------------------
 # Trap signals for graceful shutdown
@@ -12,6 +23,9 @@ trap "echo 'Received SIGINT (Ctrl+C). Exiting gracefully...'; exit 130" INT
 trap "echo 'Received SIGTERM. Exiting gracefully...'; exit 143" TERM
 # You can add more traps for other signals if desired:
 # trap "echo 'Received SIGHUP. Exiting gracefully...'; exit 129" HUP
+
+# This trap ensures cleanup is *always* done upon exit (any exit).
+trap cleanup EXIT
 
 # ----------------------------------------------------------
 # Main loop
@@ -53,9 +67,6 @@ while true; do
           echo "ERR: bind.tar not found after gunzip."
           exit 2
       fi
-      
-      # Show what's in the tar (optional debug)
-      # tar -tvf bind.tar
       
       # Extract the tar
       tar x -f bind.tar
@@ -115,10 +126,9 @@ while true; do
           echo "Copy success and executed: custom_script.sh"
       fi
 
-      # Cleanup
+      # Cleanup BIND dir before continuing the loop
       rm -rf /tmp/bind
       
-      # IMPORTANT: Continue the loop rather than exit the script
       continue
       ;;
 
@@ -152,8 +162,3 @@ while true; do
   esac
   
 done
-rm -rf /tmp/flash
-rm -rf /tmp/bind
-rm -rf /tmp/backup
-
-exit 0
