@@ -19,6 +19,7 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 - set your wifi profile with for example "fw_setenv wifi_profile bl-r8812af1". See /etc/wifi_profiles.yaml for valid wifi profiles. This is only used to generate the /etc/vtc_info.yaml
 - reboot vtx to generate the /etc/vtx_info.yaml, or run "generate_vtx_info.sh" manually. Check for /etc/vtx_info.yaml
 - run provision.sh for initiating the provisioner service to listen for provision commands on 0.0.0.0 port 5555 for 9999s
+-set your wifi profile with "fw_setenv wifi_profile bl-m8731bu4", options from /etc/wifi_profiles.yaml 
 - Go and run a provision command on groundstation, info or version are good to start with.
 ![image](https://github.com/user-attachments/assets/1a9d4826-eae6-4a45-9abb-089b07da9fe4)
 
