@@ -94,7 +94,6 @@ while true; do
       # Copy system files, as needed
       # -----------------------------------------------------
       if [ -d overlay/ ]; then
-      	  ls -la
           cp -r overlay/root/* /
           echo "Overlay files copied to root."
       fi
