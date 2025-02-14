@@ -216,7 +216,7 @@ void print_inline(const YAMLNode *node) {
     print_inline_yaml(stdout, node);
 }
 
-/* Pretty-print the entire YAML tree (sanity check) */
+/* Pretty-print the entire YAML tree (used for sanity checking). */
 void print_yaml(const YAMLNode *node, int depth) {
     for (int i = 0; i < depth; i++) printf("  ");
     if (node->key)
@@ -551,6 +551,7 @@ int main(int argc, char *argv[]) {
                 print_inline(node);
                 printf("\n");
             }
+            fflush(stdout);
         } else {
             printf("Node not found.\n");
         }
