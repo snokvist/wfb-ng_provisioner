@@ -140,8 +140,11 @@ curl -s "http://localhost/api/v1/set?video0.bitrate=${TARGET}" > /dev/null
 
 # --- Set radio settings in the running session ---
 # Set FEC using the original YAML values (order unchanged)
-wfb_tx_cmd 8000 set_fec -k "$fec_k" -n "$fec_n"
+#wfb_tx_cmd 8000 set_fec -k "$fec_k" -n "$fec_n"
 # Set radio settings (bandwidth, guard, mcs) using the candidate values
-wfb_tx_cmd 8000 set_radio -B "$candidate_bw" -G "$candidate_gi" -M "$candidate_mcs"
+#wfb_tx_cmd 8000 set_radio -B "$candidate_bw" -G "$candidate_gi" -M "$candidate_mcs"
+
+wifibroadcast stop
+wifibroadcast start
 
 echo "Settings applied successfully."
