@@ -42,6 +42,9 @@
  * When using -s/-S and -d, changes are saved back to the file.
  * Leading dots (e.g. ".fpv.enabled") are allowed.
  *
+ * If no operation (-g, -s, -S or -d) is specified, a sanity check is performed:
+ * the YAML file is parsed and the complete structure is dumped in a pretty format.
+ *
  * Example usage:
  *    ./configurator -i config.yaml
  *    ./configurator -i config.yaml -g network.wifi.ssid
@@ -211,6 +214,21 @@ void print_inline_yaml(FILE *f, const YAMLNode *node) {
 /* Print inline representation to stdout (for -g). */
 void print_inline(const YAMLNode *node) {
     print_inline_yaml(stdout, node);
+}
+
+/* Pretty-print the entire YAML tree (sanity check) */
+void print_yaml(const YAMLNode *node, int depth) {
+    for (int i = 0; i < depth; i++) printf("  ");
+    if (node->key)
+        printf("%s: ", node->key);
+    if (node->value)
+        printf("%s", node->value);
+    if (node->num_children > 0)
+        printf(" {%s}", (node->type == YAML_NODE_SEQUENCE ? "sequence" : "mapping"));
+    printf("\n");
+    for (size_t i = 0; i < node->num_children; i++) {
+        print_yaml(node->children[i], depth + 1);
+    }
 }
 
 /* Standard parse_line() that updates the in-memory tree from one line of YAML. */
@@ -590,6 +608,10 @@ int main(int argc, char *argv[]) {
         } else {
             printf("Node '%s' not found.\n", delete_path);
         }
+    } else {
+        /* Sanity check: no operation specified, so dump the parsed structure */
+        printf("YAML configuration parsed successfully. Dumping structure:\n");
+        print_yaml(root, 0);
     }
     free_node(root);
     return EXIT_SUCCESS;
