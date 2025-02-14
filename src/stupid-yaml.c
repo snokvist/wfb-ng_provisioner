@@ -180,7 +180,7 @@ YAMLNode *parse_inline_mapping(const char *str) {
     return node;
 }
 
-/* Print a YAML node inline to a given file pointer.
+/* Print a YAML node inline to the specified file pointer.
    Scalars print their value; sequences print as "[item,item,...]"; mappings as "{key:value,...}". */
 void print_inline_yaml(FILE *f, const YAMLNode *node) {
     if (!node) return;
@@ -528,9 +528,11 @@ int main(int argc, char *argv[]) {
         YAMLNode *node = find_node(root, get_path);
         if (node) {
             if (node->type == YAML_NODE_SCALAR && node->value)
-                printf("%s", node->value);
-            else
+                printf("%s\n", node->value);
+            else {
                 print_inline(node);
+                printf("\n");
+            }
         } else {
             printf("Node not found.\n");
         }
