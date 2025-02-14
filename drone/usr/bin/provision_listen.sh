@@ -14,7 +14,7 @@ cleanup() {
   rm -rf /tmp/flash
   rm -rf /tmp/bind
   rm -rf /tmp/backup
-
+}
 
 # ----------------------------------------------------------
 # Trap signals for graceful shutdown
