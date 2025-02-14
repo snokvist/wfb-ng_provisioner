@@ -146,9 +146,9 @@ compute_final() {
         exit 1
     fi
 
-    denom=$(( 4 * fec_k ))
+    denom=$(( 3 * fec_k ))
     half_denom=$(( denom / 2 ))
-    num=$(( base * 3 * fec_n ))
+    num=$(( base * 2 * fec_n ))
     final=$(( (num + half_denom) / denom ))
     if [ "$final" -gt "$CAP" ]; then
          final="$CAP"
