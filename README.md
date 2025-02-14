@@ -9,7 +9,8 @@
 By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning. see --help for full command list.
 - connect.py --info
 - connect.py --version
-- connect.py --bind folder-containing-bind-files-to-send/
+- connect.py --bind folder-containing-bind-files-to-send/ (if you have a custom folder structure you want to compress, checksum and send. must be parsable by "provision_listen.sh on drone)
+-  connect.py --bind backup-folder-to-store-backups/my-backup.tar.gz (direct target a tar.gz generated from --backup)
 - connect.py --unbind (will initiate firstboot on drone)
 - connect.py --backup backup-folder-to-store-backups/
 
