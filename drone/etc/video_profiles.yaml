@@ -1,23 +1,22 @@
-all_profiles: [low_latency,default]
+all_profiles: [vipers_profile,user1,user2,default]
 profiles:
-  low_latency:
-    video0:
+  vipers_profile:
+    wireless:
+      channel: 161
+      redundancy: medium
+      range_preference: long
+    video:
       size: 1280x720
-      bitrate: 8096
-      gopSize: 2
-    fps: 120
-      fpv:
-        enabled: true
-        noiseLevel: 0
-        refPred: true
-        refEnhance: 6
-  cinematic:
-    video0:
-      size:
-      bitrate: 16182
-      gopSize: 2
-    fps: 60
-      fpv:
-        enabled: true
-        noiseLevel: 1
-    default:
+      fps: 90
+      bitrate_target: 12000
+    telemetry:
+      osd: msposd
+      connected_fc: betaflight
+      serial_tty: ttyS2
+  user1:
+    size: [1280x720]
+  user2:
+    size: [1280x720]
+  default:
+    size: [1280x720]
+
