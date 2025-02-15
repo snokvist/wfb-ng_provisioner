@@ -60,4 +60,4 @@ wfb_tun -a 10.5.99.2/24 &
 # Sleep needed for wfb_tun to initialize
 sleep 15
 
-exit 0
+esac

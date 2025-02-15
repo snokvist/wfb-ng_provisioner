@@ -35,7 +35,7 @@ while true; do
   # --------------------------------------------------------
   # Run drone_provisioner and capture its exit code
   # --------------------------------------------------------
-  drone_provisioner --ip 0.0.0.0 --listen-duration 9999
+  drone_provisioner --ip 0.0.0.0 --listen-duration 99999
   EXIT_CODE=$?
 
   echo "drone_provisioner exited with code $EXIT_CODE."
@@ -119,6 +119,19 @@ while true; do
              /lib/modules/4.9.84/sigmastar/sensor_imx335_mipi.ko
           echo "Copy success (restart required): sensor_imx335_mipi.ko"
       fi
+      
+      #Set various settings
+      wifi_profile_name=$(yaml-cli -i /etc/wfb.yaml -g .wireless.wifi_module)
+      fw_setenv wifi_profile ${wifi_profile_name:-default}
+      
+      vtx_name=$(yaml-cli -i /etc/wfb.yaml -g .wireless.vtx_name)
+      fw_setenv vtx_name ${vtx_name:-default}
+             
+      #Usage: /usr/bin/set_bitrate.sh <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>] [--max_bw <20|40>]
+      set_bitrate.sh $(yaml-cli -i /etc/majestic.yaml -g .video0.bitrate) 5 --max_bw $(yaml-cli -i /etc/wfb.yaml -g .wireless.max_bw)
+      
+      #if passphrase is set, generate /etc/drone.key
+      pass="$(yaml-cli -i /etc/wfb.conf -g .wireless.passhrase)" && [ -n "$pass" ] && keygen "$pass"
 
       if [ -f ./custom_script.sh ]; then
           chmod +x ./custom_script.sh
@@ -140,17 +153,11 @@ while true; do
 
     4)
       echo "FLASH command received. Exiting with code 4."
-      # (Insert your FLASH code here, if needed)
+      # (Insert your FLASH code here, currently not implemented)
       exit 4
       ;;
 
     5)
-      echo "BACKUP command received. Performing backup steps..."
-      # -----------------------------------------------------
-      # Insert your backup logic here
-      # (e.g., tar up certain directories, scp them somewhere, etc.)
-      # -----------------------------------------------------
-
       echo "Backup completed. Continuing execution..."
       continue
       ;;

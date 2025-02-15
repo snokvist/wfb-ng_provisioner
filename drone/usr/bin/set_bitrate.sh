@@ -115,7 +115,9 @@ fi
 # We now pass the optional --max_bw parameter.
 RESULT=$(bitrate_calculator.sh "$TARGET" "$fec_ratio" "$max_mcs" --cap "$CAP" --gi long --max_bw "$MAX_BW")
 if [ $? -ne 0 ]; then
-    echo "Error: bitrate_calculator.sh failed."
+    echo "Error: bitrate_calculator.sh failed. Setting fallback, please retry with a lower bitrate."
+    #Fallback
+    set_bitrate.sh 3000 0 --max_bw 20
     exit 1
 fi
 
@@ -139,9 +141,10 @@ echo "   Allowed max BW: ${max_bw_allowed} MHz"
 
 # --- Update YAML configuration ---
 # Update /etc/wfb.yaml:
-yaml-cli -i /etc/wfb.yaml -s .broadcast.wfb_index "$candidate_mcs"
-yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_k "$fec_k"
-yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_n "$fec_n"
+yaml-cli -i /etc/wfb.yaml -s .broadcast.mcs_index "$candidate_mcs" > /dev/null
+yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_k "$fec_k" > /dev/null
+yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_n "$fec_n" > /dev/null
+yaml-cli -i /etc/wfb.yaml -s .broadcast.guard_interval "$candidate_gi" > /dev/null
 
 # Determine wireless mode:
 # If the allowed maximum BW is 40, then force mode "HT40+"
@@ -150,26 +153,23 @@ if [ "$max_bw_allowed" -eq 40 ]; then
 else
     mode="HT${candidate_bw}"
 fi
-yaml-cli -i /etc/wfb.yaml -s .wireless.mode "$mode"
 
-# Update /etc/majestic.yaml: set .video0.bitrate to TARGET
-yaml-cli -i /etc/majestic.yaml -s .video0.bitrate "$TARGET"
-
-# --- Inform the running instance via curl ---
-curl -s "http://localhost/api/v1/set?video0.bitrate=${TARGET}" > /dev/null
-
-# --- (Optional) Restart services and set radio settings ---
-echo "Stopping wifibroadcast..."
+yaml-cli -i /etc/wfb.yaml -s .wireless.mode "$mode" > /dev/null
+yaml-cli -i /etc/wfb.yaml -s .broadcast.bw "$candidate_bw" > /dev/null
+yaml-cli -i /etc/majestic.yaml -s .video0.bitrate "$TARGET" > /dev/null
 
 set +e
 /etc/init.d/S98wifibroadcast stop
 ret=$?
+
 if [ $ret -ne 0 ]; then
     echo "wifibroadcast stop failed (exit code $ret), sleeping 5 seconds before retrying..."
     sleep 5
     /etc/init.d/S98wifibroadcast stop
 fi
 set -e
+
+curl -s localhost/api/v1/set?video0.bitrate=$TARGET 2> /dev/null
 
 if ! pgrep -f majestic >/dev/null 2>&1; then
     echo "Majestic is not running. Starting majestic..."
@@ -178,7 +178,6 @@ else
     echo "Majestic is running."
 fi
 
-echo "Starting wifibroadcast..."
 set +e
 /etc/init.d/S98wifibroadcast start
 ret=$?
@@ -189,8 +188,4 @@ if [ $ret -ne 0 ]; then
 fi
 set -e
 
-# Uncomment the following lines to set radio settings in the running session:
-# wfb_tx_cmd 8000 set_fec -k "$fec_k" -n "$fec_n"
-# wfb_tx_cmd 8000 set_radio -B "$candidate_bw" -G "$candidate_gi" -M "$candidate_mcs"
-
-echo "Settings applied successfully."
+echo "Bitrate settings applied successfully."
