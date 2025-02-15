@@ -68,7 +68,7 @@ video:
 ### Temperature throttling
 ````
 #!/bin/sh
-# Threshold definitions:
+# Threshold definitions (degrees Celsius (symbol: °C)):
 WARNING1_THRESHOLD=80       # First warning threshold, if below the vtx will reset to original settings
 WARNING2_THRESHOLD=90       # Second warning, threshold, written to msposd (warning: VTX will soon throttle), no actions taken yet
 THROTTLE_THRESHOLD=100      # Throttle Level 1, written to msposd and TX_PWR set to "10" and FPS set to 30.
