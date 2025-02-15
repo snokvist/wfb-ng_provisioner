@@ -6,11 +6,14 @@
 #
 # 1. Normal (default) mode:
 #    Usage:
-#       bitrate_calculator.sh <target_bitrate_in_kbps> [fec_ratio] [max_mcs (0-7)] [--cap <cap>]
+#       bitrate_calculator.sh <target_bitrate_in_kbps> [fec_ratio] [max_mcs (0-7)] [--cap <cap>] [--gi <guard>] [--max_bw <20|40>]
 #
 #    If fec_ratio is not provided, it defaults to "8/12".
 #    The script searches (in fixed order: 20 MHz long, 20 MHz short, then 40 MHz long, 40 MHz short)
 #    for the lowest MCS (0..max_mcs, default max_mcs=7) whose computed forward rate is ≥ target.
+#    If the optional "--gi" is provided, only that guard interval is used.
+#    If the optional "--max_bw" is provided, it limits the search to that maximum bandwidth.
+#
 #    The computed rate is given by:
 #
 #         final = ( base_rate * 3 * fec_n + (4*fec_k)/2 ) / (4*fec_k)
@@ -35,6 +38,8 @@
 # Default cap is 20000 kbps.
 CAP=20000
 backwards_mode=0
+locked_gi=""
+MAX_BW=40   # new: default maximum bandwidth for candidate search is 40MHz (i.e. search both 20 & 40)
 other_args=""
 
 while [ "$#" -gt 0 ]; do
@@ -50,6 +55,32 @@ while [ "$#" -gt 0 ]; do
             ;;
         --backwards)
             backwards_mode=1
+            shift
+            ;;
+        --gi)
+            shift
+            if [ "$#" -eq 0 ]; then
+                echo "Error: --gi requires a value (long or short)"
+                exit 1
+            fi
+            locked_gi="$1"
+            case "$locked_gi" in
+                long|short) ;;
+                *) echo "Error: --gi must be 'long' or 'short'." ; exit 1 ;;
+            esac
+            shift
+            ;;
+        --max_bw)
+            shift
+            if [ "$#" -eq 0 ]; then
+                echo "Error: --max_bw requires a value (20 or 40)"
+                exit 1
+            fi
+            if [ "$1" != "20" ] && [ "$1" != "40" ]; then
+                echo "Error: --max_bw must be either 20 or 40"
+                exit 1
+            fi
+            MAX_BW="$1"
             shift
             ;;
         *)
@@ -78,8 +109,8 @@ set -- $other_args
 #   Short GI: 7200, 14400, 21700, 28900, 43300, 57800, 65000, 72200
 #
 # 40 MHz:
-#   Long GI:  13500, 27000, 40500, 54000, 81000, 108000, 121500, 135000
-#   Short GI: 15000, 30000, 45000, 60000, 90000, 120000, 135000, 150000
+#   Long GI:  (20% reduced) 10800, 21600, 32400, 43200, 64800, 86400, 97200, 108000
+#   Short GI: (20% reduced) 12000, 24000, 36000, 48000, 72000, 96000, 108000, 120000
 #
 # Then computes:
 #
@@ -120,25 +151,25 @@ compute_final() {
     elif [ "$bw" -eq 40 ]; then
         if [ "$gi" = "long" ]; then
             case "$mcs" in
-                0) base=13500 ;;
-                1) base=27000 ;;
-                2) base=40500 ;;
-                3) base=54000 ;;
-                4) base=81000 ;;
-                5) base=108000 ;;
-                6) base=121500 ;;
-                7) base=135000 ;;
+                0) base=10800 ;;
+                1) base=21600 ;;
+                2) base=32400 ;;
+                3) base=43200 ;;
+                4) base=64800 ;;
+                5) base=86400 ;;
+                6) base=97200 ;;
+                7) base=108000 ;;
             esac
         else
             case "$mcs" in
-                0) base=15000 ;;
-                1) base=30000 ;;
-                2) base=45000 ;;
-                3) base=60000 ;;
-                4) base=90000 ;;
-                5) base=120000 ;;
-                6) base=135000 ;;
-                7) base=150000 ;;
+                0) base=12000 ;;
+                1) base=24000 ;;
+                2) base=36000 ;;
+                3) base=48000 ;;
+                4) base=72000 ;;
+                5) base=96000 ;;
+                6) base=108000 ;;
+                7) base=120000 ;;
             esac
         fi
     else
@@ -146,9 +177,9 @@ compute_final() {
         exit 1
     fi
 
-    denom=$(( 3 * fec_k ))
+    denom=$(( 4 * fec_k ))
     half_denom=$(( denom / 2 ))
-    num=$(( base * 2 * fec_n ))
+    num=$(( base * 3 * fec_n ))
     final=$(( (num + half_denom) / denom ))
     if [ "$final" -gt "$CAP" ]; then
          final="$CAP"
@@ -171,7 +202,6 @@ if [ "$backwards_mode" -eq 1 ]; then
     guard="$3"
     fec="$4"
 
-    # Validate inputs.
     if [ "$bw" -ne 20 ] && [ "$bw" -ne 40 ]; then
          echo "Error: bandwidth must be 20 or 40."
          exit 1
@@ -202,19 +232,18 @@ fi
 # -------------------------
 # Normal Mode (Forward Search)
 # -------------------------
-# New usage:
-#    bitrate_calculator.sh <target_bitrate_in_kbps> [fec_ratio] [max_mcs (0-7)] [--cap <cap>]
+# Usage:
+#    bitrate_calculator.sh <target_bitrate_in_kbps> [fec_ratio] [max_mcs (0-7)] [--cap <cap>] [--gi <guard>]
 #
 # If fec_ratio is not provided, default is "8/12". If max_mcs is not provided, default is 7.
 if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
-    echo "Usage: $0 <target_bitrate_in_kbps> [fec_ratio] [max_mcs (0-7)] [--cap <cap>]"
+    echo "Usage: $0 <target_bitrate_in_kbps> [fec_ratio] [max_mcs (0-7)] [--cap <cap>] [--gi <guard>] [--max_bw <20|40>]"
     exit 1
 fi
 
 target="$1"
 shift
 
-# Validate target.
 case "$target" in
     ''|*[!0-9]*)
          echo "Error: target must be a positive integer." >&2
@@ -222,7 +251,6 @@ case "$target" in
          ;;
 esac
 
-# If the next argument contains a slash, treat it as the fec ratio.
 if [ "$#" -ge 1 ]; then
     case "$1" in
         */*) fec="$1"; shift;;
@@ -239,7 +267,6 @@ if [ -z "$fec_n" ] || [ -z "$fec_k" ]; then
     exit 1
 fi
 
-# Next, if any, treat next argument as max_mcs.
 if [ "$#" -ge 1 ]; then
     max_mcs="$1"
     shift
@@ -251,23 +278,45 @@ else
     max_mcs=7
 fi
 
-# Fixed search order: 20 MHz long, then 20 MHz short, then 40 MHz long, then 40 MHz short.
+# Define which bandwidth values to search based on the --max_bw option.
+if [ "$MAX_BW" -eq 20 ]; then
+    BW_VALUES="20"
+else
+    BW_VALUES="20 40"
+fi
+
 candidate_found=0
-for bw in 20 40; do
-    for gi in long short; do
+if [ -n "$locked_gi" ]; then
+    for bw in $BW_VALUES; do
         for mcs in $(seq 0 $max_mcs); do
-            final=$(compute_final "$bw" "$gi" "$mcs" "$fec_n" "$fec_k")
+            final=$(compute_final "$bw" "$locked_gi" "$mcs" "$fec_n" "$fec_k")
             if [ "$final" -ge "$target" ]; then
                 candidate_mcs="$mcs"
                 candidate_bw="$bw"
-                candidate_gi="$gi"
+                candidate_gi="$locked_gi"
                 candidate_fec="$fec"
                 candidate_found=1
-                break 3
+                break 2
             fi
         done
     done
-done
+else
+    for bw in $BW_VALUES; do
+        for gi in long short; do
+            for mcs in $(seq 0 $max_mcs); do
+                final=$(compute_final "$bw" "$gi" "$mcs" "$fec_n" "$fec_k")
+                if [ "$final" -ge "$target" ]; then
+                    candidate_mcs="$mcs"
+                    candidate_bw="$bw"
+                    candidate_gi="$gi"
+                    candidate_fec="$fec"
+                    candidate_found=1
+                    break 3
+                fi
+            done
+        done
+    done
+fi
 
 if [ "$candidate_found" -eq 1 ]; then
     echo "${candidate_mcs}:${candidate_bw}:${candidate_gi}:${candidate_fec}"

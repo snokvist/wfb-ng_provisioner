@@ -3,11 +3,12 @@
 # set_bitrate.sh
 #
 # Usage:
-#    set_bitrate.sh <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>]
+#    set_bitrate.sh <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>] [--max_bw <20|40>]
 #
 # This script reads FEC settings from /etc/wfb.yaml and allowed bandwidths
 # from /etc/vtx_info.yaml, then calls bitrate_calculator.sh (with the given
-# target, FEC ratio, and max_mcs) to compute the best settings (MCS, BW, GI).
+# target, FEC ratio, max_mcs, and maximum bandwidth limit) to compute the best
+# settings (MCS, BW, GI).
 #
 # The FEC ratio is constructed by swapping the YAML values so that a file with:
 #
@@ -21,15 +22,15 @@
 #      <mcs>:<bw>:<gi>:<fec>
 #
 # Then the script updates the YAML configuration files and sets the radio
-# settings in the running session using wfb_tx_cmd.
+# settings in the running session.
 #
-# Note: If the maximum allowed bandwidth is 40, then the wireless mode is always
-# set to "HT40+" (even if the candidate BW from the calculator is 20).
+# Note: If the candidate BW is 40, and the system’s allowed maximum bandwidth
+# (read from /etc/vtx_info.yaml) is 40, then wireless.mode is forced to "HT40+".
 #
 
 # --- Parse arguments ---
 if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>]"
+    echo "Usage: $0 <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>] [--max_bw <20|40>]"
     exit 1
 fi
 
@@ -47,6 +48,9 @@ fi
 
 # Default cap is 20000 kbps unless overridden.
 CAP=20000
+# Default max_bw for candidate search is 40 (both 20 and 40 will be searched).
+MAX_BW=40
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --cap)
@@ -56,6 +60,19 @@ while [ "$#" -gt 0 ]; do
                 exit 1
             fi
             CAP="$1"
+            shift
+            ;;
+        --max_bw)
+            shift
+            if [ -z "$1" ]; then
+                echo "Error: --max_bw requires a value (20 or 40)."
+                exit 1
+            fi
+            if [ "$1" != "20" ] && [ "$1" != "40" ]; then
+                echo "Error: --max_bw must be either 20 or 40."
+                exit 1
+            fi
+            MAX_BW="$1"
             shift
             ;;
         *)
@@ -76,7 +93,7 @@ if [ -z "$fec_n" ] || [ -z "$fec_k" ]; then
     echo "Error: Could not read FEC settings from /etc/wfb.yaml."
     exit 1
 fi
-# IMPORTANT: Swap the order so that a YAML with fec_n:12 and fec_k:8 produces "8/12".
+# Swap the order so that a YAML with fec_n:12 and fec_k:8 produces "8/12".
 fec_ratio="${fec_k}/${fec_n}"
 
 # --- Read allowed bandwidths from /etc/vtx_info.yaml ---
@@ -95,7 +112,8 @@ else
 fi
 
 # --- Call bitrate_calculator.sh ---
-RESULT=$(bitrate_calculator.sh "$TARGET" "$fec_ratio" "$max_mcs" --cap "$CAP")
+# We now pass the optional --max_bw parameter.
+RESULT=$(bitrate_calculator.sh "$TARGET" "$fec_ratio" "$max_mcs" --cap "$CAP" --gi long --max_bw "$MAX_BW")
 if [ $? -ne 0 ]; then
     echo "Error: bitrate_calculator.sh failed."
     exit 1
@@ -126,7 +144,7 @@ yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_k "$fec_k"
 yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_n "$fec_n"
 
 # Determine wireless mode:
-# If the maximum allowed BW is 40, then always use "HT40+"
+# If the allowed maximum BW is 40, then force mode "HT40+"
 if [ "$max_bw_allowed" -eq 40 ]; then
     mode="HT40+"
 else
@@ -140,15 +158,39 @@ yaml-cli -i /etc/majestic.yaml -s .video0.bitrate "$TARGET"
 # --- Inform the running instance via curl ---
 curl -s "http://localhost/api/v1/set?video0.bitrate=${TARGET}" > /dev/null
 
-# --- Set radio settings in the running session ---
-# Set FEC using the original YAML values (order unchanged)
-#wfb_tx_cmd 8000 set_fec -k "$fec_k" -n "$fec_n"
-# Set radio settings (bandwidth, guard, mcs) using the candidate values
-#wfb_tx_cmd 8000 set_radio -B "$candidate_bw" -G "$candidate_gi" -M "$candidate_mcs"
+# --- (Optional) Restart services and set radio settings ---
+echo "Stopping wifibroadcast..."
 
+set +e
+/etc/init.d/S98wifibroadcast stop
+ret=$?
+if [ $ret -ne 0 ]; then
+    echo "wifibroadcast stop failed (exit code $ret), sleeping 5 seconds before retrying..."
+    sleep 5
+    /etc/init.d/S98wifibroadcast stop
+fi
+set -e
 
+if ! pgrep -f majestic >/dev/null 2>&1; then
+    echo "Majestic is not running. Starting majestic..."
+    /etc/init.d/S95majestic start
+else
+    echo "Majestic is running."
+fi
 
-wifibroadcast stop
-wifibroadcast start
+echo "Starting wifibroadcast..."
+set +e
+/etc/init.d/S98wifibroadcast start
+ret=$?
+if [ $ret -ne 0 ]; then
+    echo "wifibroadcast start failed (exit code $ret), sleeping 5 seconds before retrying..."
+    sleep 5
+    /etc/init.d/S98wifibroadcast start
+fi
+set -e
+
+# Uncomment the following lines to set radio settings in the running session:
+# wfb_tx_cmd 8000 set_fec -k "$fec_k" -n "$fec_n"
+# wfb_tx_cmd 8000 set_radio -B "$candidate_bw" -G "$candidate_gi" -M "$candidate_mcs"
 
 echo "Settings applied successfully."
