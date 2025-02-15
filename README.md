@@ -37,7 +37,6 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 
 ### VTX info output
 ````
-```
 vtx_id: 556E23F52D0A
 vtx_name: OpenIPC
 build_option: fpv
@@ -65,7 +64,17 @@ video:
     60fps: [2560x1440,1920x1080,1600x900,1440x810,1280x720]
     90fps: [2208x1248,1920x1080,1440x810,1280x720,1104x624]
     120fps: [1920x1080,1600x900,1440x810,1280x720,960x540]
-```
 ````
+### Temperature throttling
+````
+#!/bin/sh
+# Threshold definitions:
+WARNING1_THRESHOLD=80       # First warning threshold, if below the vtx will reset to original settings
+WARNING2_THRESHOLD=90       # Second warning threshold written to msposd (warning: VTX will soon throttle), no actions taken yet
+THROTTLE_THRESHOLD=100      # Throttle Level 1 written to msposd and  threshold (100–104°C)
+THROTTLE2_THRESHOLD=105     # Throttle Level 2 threshold (105–109°C)
+REBOOT_THRESHOLD=110        # Reboot threshold (>=110°C)
+````
+
 # Source
 https://github.com/svpcom/wfb-ng/wiki/Drone-auto-provisioning
