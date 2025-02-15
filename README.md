@@ -6,7 +6,7 @@
   - Python client available for groundstation for testing 
   - Provision on bootup (15s) for a unbinded vtx. Can be turned off in settings.
 - Automatic passphrase generation of drone.key on bind (Similar to ELRS passphrase)
-- Able to match known wifi profiles to TX-PWR settings.
+- Able to match known wifi profiles to TX-PWR settings, LDPC, STBC (handles 8731bu)
 - Able to set a custom name to your VTX, to be used for saving backups and possible other things.
 - Prepared for community presets/profiles parsing.
 - Automatic bitrate negotiation. decide the bitrate you want to have, and GI,MCS,BW will be automatically selected to fit the channel. Priority order BW>MCS>GI. Capped at 20mbps per default. Fallback if invalid bitrate requested is mcs0 3000bitrate 20mhz long.
