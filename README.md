@@ -1,5 +1,15 @@
 # WFB-NG Provisioning for OpenIPC reference
 
+## Feature summary
+- WFB-NG provisioning implemented using a mix of scripts and a main C program.
+  - BIND(yes),UNBIND(yes),BACKUP(yes),INFO(yes),VERSION(yes),FLASH(prepared, not implemented)
+  - Provision on bootup (15s) for a unbinded vtx. Can be turned off in settings.
+- Automatic passphrase generation of drone.key on bind (Similar to ELRS passphrase)
+- Able to match known wifi profiles to TX-PWR settings.
+- Able to set a custom name to your VTX, to be used for saving backups and possible other things.
+- Prepared for community presets/profiles parsing.
+- Automatic bitrate negotiation. decide the bitrate you want to have, and GI,MCS,BW will be automatically selected to fit the channel. Priority order BW>MCS>GI. Capped at 20mbps per default. Fallback if invalid bitrate requested is mcs0 3000bitrate 20mhz long.
+
 ## Groundstation
 - Setup wfb-ng to use/listen channel 165, until the full openipc-bind is implemented by wfb-ng.
 - Run sudo wfb-server --profiles gs gs_bind --wlans wlan1 (This will initiate a tunnel on both the bind and normal gs interface, but you must have latest wfb-ng master branch)
@@ -16,7 +26,7 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 - connect.py --backup backup-folder-to-store-backups/
 
 ## Drone
-- Setup wfb-ng to use/listen channel 165, until the full openipc-bind is implemented by wfb-ng.
+- Setup wfb-ng to use/listen channel 165 for troubleshooting and debug. But it doesnt really matter as long as gs/vtx is on the same channel.
 - Copy files from "drone" to drone folder structures. Apply chmod +x on /usr/bin and /etc/init.d/ files.
 - set your wifi profile with for example "fw_setenv wifi_profile bl-r8812af1". See /etc/wifi_profiles.yaml for valid wifi profiles. This is only used to generate the /etc/vtc_info.yaml
 - set your vtx name with "fw_setenv vtx_name My_Cool_VTX". This is only used to generate the /etc/vtc_info.yaml but is used for example when naming your backup.
@@ -25,13 +35,37 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 - Go and run a provision command on groundstation, info or version are good to start with. --backup and --bind can be next step.
 ![image](https://github.com/user-attachments/assets/1a9d4826-eae6-4a45-9abb-089b07da9fe4)
 
-### drone_provisioner exit codes:
-- #define EXIT_OK     0
-- #define EXIT_ERR    1
-- #define EXIT_BIND   2
-- #define EXIT_UNBIND 3
-- #define EXIT_FLASH  4
-- #define EXIT_BACKUP 5
-
+### VTX info output
+````
+```
+vtx_id: 556E23F52D0A
+vtx_name: OpenIPC
+build_option: fpv
+soc: ssc338q
+wifi:
+  wifi_adapter: 8733bu
+  wifi_profile: bl-m8731bu4
+  bw: [5,10,20,40]
+  ldpc: [0]
+  stbc: [0]
+  tx_power:
+    mcs0: [1,5,10,15,20,25,30,35,40,45,50,55,60,63]
+    mcs1: [1,5,10,15,20,25,30,35,40,45,50,55,60]
+    mcs2: [1,5,10,15,20,25,30,35,40,45,50,55]
+    mcs3: [1,5,10,15,20,25,30,35,40,45,50]
+    mcs4: [1,5,10,15,20,25,30,35,40,45]
+    mcs5: [1,5,10,15,20,25,30,35,40]
+    mcs6: [1,5,10,15,20,25,30,35,40]
+    mcs7: [1,5,10,15,20,25,30,35]
+video:
+  sensor: imx335
+  bitrate: [4096,6144,8192,10240,12288,14336,16384,18432,20480]
+  imu_sensor: BMI270
+  modes:
+    60fps: [2560x1440,1920x1080,1600x900,1440x810,1280x720]
+    90fps: [2208x1248,1920x1080,1440x810,1280x720,1104x624]
+    120fps: [1920x1080,1600x900,1440x810,1280x720,960x540]
+```
+````
 # Source
 https://github.com/svpcom/wfb-ng/wiki/Drone-auto-provisioning
