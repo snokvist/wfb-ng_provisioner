@@ -83,7 +83,7 @@ while true; do
                 wifibroadcast start
                 /etc/init.d/S95majestic start
             fi
-            echo "Normal: VTX Temp:&T WifiTemp:&W" > /tmp/msposd.msg
+            echo "Normal: VTX Temp:&T WifiTemp:&W"
         
         elif [ "$current_state" -eq 1 ]; then
             echo "Warning: High temperature detected. VTX Temp:&T WifiTemp:&W" > /tmp/msposd.msg
