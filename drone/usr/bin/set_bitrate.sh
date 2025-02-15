@@ -122,6 +122,8 @@ echo "   Allowed max BW: ${max_bw_allowed} MHz"
 # --- Update YAML configuration ---
 # Update /etc/wfb.yaml:
 yaml-cli -i /etc/wfb.yaml -s .broadcast.wfb_index "$candidate_mcs"
+yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_k "$fec_k"
+yaml-cli -i /etc/wfb.yaml -s .broadcast.fec_n "$fec_n"
 
 # Determine wireless mode:
 # If the maximum allowed BW is 40, then always use "HT40+"
@@ -143,6 +145,8 @@ curl -s "http://localhost/api/v1/set?video0.bitrate=${TARGET}" > /dev/null
 #wfb_tx_cmd 8000 set_fec -k "$fec_k" -n "$fec_n"
 # Set radio settings (bandwidth, guard, mcs) using the candidate values
 #wfb_tx_cmd 8000 set_radio -B "$candidate_bw" -G "$candidate_gi" -M "$candidate_mcs"
+
+
 
 wifibroadcast stop
 wifibroadcast start
