@@ -3,12 +3,14 @@
 ## Feature summary
 - WFB-NG provisioning implemented using a mix of scripts and a main C program.
   - BIND(yes),UNBIND(yes),BACKUP(yes),INFO(yes),VERSION(yes),FLASH(prepared, not implemented)
+  - Python client available for groundstation for testing 
   - Provision on bootup (15s) for a unbinded vtx. Can be turned off in settings.
 - Automatic passphrase generation of drone.key on bind (Similar to ELRS passphrase)
 - Able to match known wifi profiles to TX-PWR settings.
 - Able to set a custom name to your VTX, to be used for saving backups and possible other things.
 - Prepared for community presets/profiles parsing.
 - Automatic bitrate negotiation. decide the bitrate you want to have, and GI,MCS,BW will be automatically selected to fit the channel. Priority order BW>MCS>GI. Capped at 20mbps per default. Fallback if invalid bitrate requested is mcs0 3000bitrate 20mhz long.
+- Automatic temperature throttling (scroll down to see limits and actions)
 
 ## Groundstation
 - Setup wfb-ng to use/listen channel 165, until the full openipc-bind is implemented by wfb-ng.
@@ -29,10 +31,8 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 - Setup wfb-ng to use/listen channel 165 for troubleshooting and debug. But it doesnt really matter as long as gs/vtx is on the same channel.
 - Copy files from "drone" to drone folder structures. Apply chmod +x on /usr/bin and /etc/init.d/ files.
 - set your wifi profile with for example "fw_setenv wifi_profile bl-r8812af1". See /etc/wifi_profiles.yaml for valid wifi profiles. This is only used to generate the /etc/vtc_info.yaml
-- set your vtx name with "fw_setenv vtx_name My_Cool_VTX". This is only used to generate the /etc/vtc_info.yaml but is used for example when naming your backup.
 - reboot vtx to generate the /etc/vtx_info.yaml, or run "generate_vtx_info.sh" manually. Check for /etc/vtx_info.yaml
-- run provision_listen.sh for initiating the provisioner service to listen for provision commands on 0.0.0.0 port 5555 for 9999s (or if service already running due to init scripts, you need to kill it first)
-- Go and run a provision command on groundstation, info or version are good to start with. --backup and --bind can be next step.
+- Run a provision command on groundstation, info or version are good to start with. --backup and --bind can be next step.
 ![image](https://github.com/user-attachments/assets/1a9d4826-eae6-4a45-9abb-089b07da9fe4)
 
 ### VTX info output
@@ -70,10 +70,10 @@ video:
 #!/bin/sh
 # Threshold definitions:
 WARNING1_THRESHOLD=80       # First warning threshold, if below the vtx will reset to original settings
-WARNING2_THRESHOLD=90       # Second warning threshold written to msposd (warning: VTX will soon throttle), no actions taken yet
-THROTTLE_THRESHOLD=100      # Throttle Level 1 written to msposd and  threshold (100–104°C)
-THROTTLE2_THRESHOLD=105     # Throttle Level 2 threshold (105–109°C)
-REBOOT_THRESHOLD=110        # Reboot threshold (>=110°C)
+WARNING2_THRESHOLD=90       # Second warning, threshold, written to msposd (warning: VTX will soon throttle), no actions taken yet
+THROTTLE_THRESHOLD=100      # Throttle Level 1, written to msposd and TX_PWR set to "10" and FPS set to 30.
+THROTTLE2_THRESHOLD=105     # Throttle Level 2, warning written to msposd and a 10second timout starts. After expiration majestic (video streamer) will be killed forcefully.
+REBOOT_THRESHOLD=110        # Reboot threshold, warning echo to terminal and 5second countdown to reboot initiated.
 ````
 
 # Source
