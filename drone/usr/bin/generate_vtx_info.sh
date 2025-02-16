@@ -104,13 +104,15 @@ done
 # Read bandwidth (bw), LDPC, and STBC from /etc/wifi_profiles.yaml using wifi_profile.
 if [ -n "$wifi_profile" ] && [ -f /etc/wifi_profiles.yaml ]; then
   wifi_bw=$(yaml-cli -i /etc/wifi_profiles.yaml -g profiles."$wifi_profile".bw 2>/dev/null)
-  wifi_ldpc=$(yaml-cli -i /etc/wifi_profiles.yaml -g profiles."$wifi_profile".ldpc 2>/dev/null)
+  wifi_ldpc_rx=$(yaml-cli -i /etc/wifi_profiles.yaml -g profiles."$wifi_profile".ldpc_rx 2>/dev/null)
+  wifi_ldpc_tx=$(yaml-cli -i /etc/wifi_profiles.yaml -g profiles."$wifi_profile".ldpc_tx 2>/dev/null)
   wifi_stbc=$(yaml-cli -i /etc/wifi_profiles.yaml -g profiles."$wifi_profile".stbc 2>/dev/null)
 fi
 
 # Fallback defaults if any parameter is missing.
 [ -z "$wifi_bw" ] && wifi_bw="[20]"
-[ -z "$wifi_ldpc" ] && wifi_ldpc="[0]"
+[ -z "$wifi_ldpc_rx" ] && wifi_ldpc_rx="[0]"
+[ -z "$wifi_ldpc_tx" ] && wifi_ldpc_tx="[0]"
 [ -z "$wifi_stbc" ] && wifi_stbc="[0]"
 
 ########################################
@@ -193,7 +195,8 @@ yaml-cli -i "$YAML_FILE" -s soc "$soc"
 yaml-cli -i "$YAML_FILE" -s wifi.wifi_adapter "$wifi_adapter"
 yaml-cli -i "$YAML_FILE" -s wifi.wifi_profile "$wifi_profile"
 yaml-cli -i "$YAML_FILE" -s wifi.bw "$wifi_bw"
-yaml-cli -i "$YAML_FILE" -s wifi.ldpc "$wifi_ldpc"
+yaml-cli -i "$YAML_FILE" -s wifi.ldpc_rx "$wifi_ldpc_rx"
+yaml-cli -i "$YAML_FILE" -s wifi.ldpc_tx "$wifi_ldpc_tx"
 yaml-cli -i "$YAML_FILE" -s wifi.stbc "$wifi_stbc"
 # TX power settings (nested mapping).
 yaml-cli -i "$YAML_FILE" -s wifi.tx_power.mcs0 "$tx_mcs0"
@@ -206,6 +209,7 @@ yaml-cli -i "$YAML_FILE" -s wifi.tx_power.mcs6 "$tx_mcs6"
 yaml-cli -i "$YAML_FILE" -s wifi.tx_power.mcs7 "$tx_mcs7"
 
 # Video section.
+yaml-cli -i "$YAML_FILE" -s video.alink "[disabled,simple_alink,greg_alink]"
 yaml-cli -i "$YAML_FILE" -s video.sensor "$sensor"
 yaml-cli -i "$YAML_FILE" -s video.bitrate "$bitrate"
 yaml-cli -i "$YAML_FILE" -s video.imu_sensor "$imu_sensor"

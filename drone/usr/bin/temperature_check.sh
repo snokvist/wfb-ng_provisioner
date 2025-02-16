@@ -114,7 +114,7 @@ while true; do
             
         
         elif [ "$current_state" -eq 5 ]; then
-            echo "VTX will reboot due to thermal state...VTX Temp:&T WifiTemp:&W. Rebooting in 5 seconds..." > /tmp/msposd.msg
+            echo "VTX will reboot due to thermal state...VTX Temp:&T WifiTemp:&W. Rebooting in 5 seconds..."
             sleep 5
             reboot
         fi
