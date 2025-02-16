@@ -11,6 +11,7 @@
 - Prepared for community presets/profiles parsing.
 - Automatic bitrate negotiation. decide the bitrate you want to have, and GI,MCS,BW will be automatically selected to fit the channel. Priority order BW>MCS>GI. Capped at 20mbps per default. Fallback if invalid bitrate requested is mcs0 3000bitrate 20mhz long.
 - Automatic temperature throttling (scroll down to see limits and actions)
+- Simple-alink prototype
 
 ## Groundstation
 - Setup wfb-ng to use/listen channel 165, until the full openipc-bind is implemented by wfb-ng.
@@ -34,6 +35,10 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 - reboot vtx to generate the /etc/vtx_info.yaml, or run "generate_vtx_info.sh" manually. Check for /etc/vtx_info.yaml
 - Run a provision command on groundstation, info or version are good to start with. --backup and --bind can be next step.
 ![image](https://github.com/user-attachments/assets/1a9d4826-eae6-4a45-9abb-089b07da9fe4)
+
+### Simple alink
+- Run on drone wfb_bind_srv_armhf --udp 5557 0.0.0.0 simple_alink.sh --verbose
+- run on GS: ./wfb_bind_srv --client --udp 5557 10.5.0.10 ./alink_tester.py --udp
 
 ### VTX info output
 ````
