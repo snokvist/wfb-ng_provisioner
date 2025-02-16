@@ -131,21 +131,21 @@ compute_final() {
                 1) base=13000 ;;
                 2) base=19500 ;;
                 3) base=26000 ;;
-                4) base=39000 ;;
-                5) base=52000 ;;
-                6) base=58500 ;;
-                7) base=65000 ;;
+                4) base=34000 ;;
+                5) base=47000 ;;
+                6) base=53500 ;;
+                7) base=60000 ;;
             esac
         else
             case "$mcs" in
                 0) base=7200 ;;
                 1) base=14400 ;;
                 2) base=21700 ;;
-                3) base=28900 ;;
-                4) base=43300 ;;
-                5) base=57800 ;;
-                6) base=65000 ;;
-                7) base=72200 ;;
+                3) base=23900 ;;
+                4) base=38300 ;;
+                5) base=52800 ;;
+                6) base=60000 ;;
+                7) base=67200 ;;
             esac
         fi
     elif [ "$bw" -eq 40 ]; then
@@ -177,9 +177,9 @@ compute_final() {
         exit 1
     fi
 
-    denom=$(( 4 * fec_k ))
+    denom=$(( 3 * fec_k ))
     half_denom=$(( denom / 2 ))
-    num=$(( base * 3 * fec_n ))
+    num=$(( base * 2 * fec_n ))
     final=$(( (num + half_denom) / denom ))
     if [ "$final" -gt "$CAP" ]; then
          final="$CAP"
