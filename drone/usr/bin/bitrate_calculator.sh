@@ -128,10 +128,10 @@ compute_final() {
         if [ "$gi" = "long" ]; then
             case "$mcs" in
                 0) base=6500 ;;
-                1) base=13000 ;;
-                2) base=19500 ;;
-                3) base=26000 ;;
-                4) base=34000 ;;
+                1) base=12000 ;;
+                2) base=17500 ;;
+                3) base=22000 ;;
+                4) base=30000 ;;
                 5) base=47000 ;;
                 6) base=53500 ;;
                 7) base=60000 ;;
@@ -139,13 +139,13 @@ compute_final() {
         else
             case "$mcs" in
                 0) base=7200 ;;
-                1) base=14400 ;;
-                2) base=21700 ;;
+                1) base=13400 ;;
+                2) base=19700 ;;
                 3) base=23900 ;;
-                4) base=38300 ;;
-                5) base=52800 ;;
-                6) base=60000 ;;
-                7) base=67200 ;;
+                4) base=33300 ;;
+                5) base=49800 ;;
+                6) base=55000 ;;
+                7) base=60200 ;;
             esac
         fi
     elif [ "$bw" -eq 40 ]; then

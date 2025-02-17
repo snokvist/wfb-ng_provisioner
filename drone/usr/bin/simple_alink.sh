@@ -25,8 +25,17 @@
 #     increased or decreased, updates state, and calls a system command
 #     to update the tx power.
 #
-# Additionally, if more than FALLBACK_TIMEOUT seconds elapse without a
-# heartbeat (or BITRATE/TX_PWR command), fallback system commands are issued.
+# Fallback:
+#   - If more than FALLBACK_TIMEOUT seconds elapse without any valid command,
+#     fallback commands are issued for both BITRATE and TX_PWR.
+#
+# COMMAND ENABLE:
+#   - Activates the system (same as receiving the first valid command).
+#
+# COMMAND DISABLE:
+#   - Deactivates the system (resetting all states to initial) and issues:
+#         set_alink_bitrate.sh 8000 5 --max_bw 20
+#         set_alink_tx_pwr.sh 5
 #
 # --verbose option: if provided as the first argument, enables debug output to stderr.
 
@@ -54,21 +63,24 @@ FALLBACK_TX=8                   # Fallback tx power value.
 # Replace the commands below with your actual system commands.
 FALLBACK_COMMAND="set_alink_bitrate.sh"       # Command to call on bitrate fallback.
 UPDATE_BITRATE_COMMAND="set_alink_bitrate.sh" # Command to update bitrate.
-UPDATE_TX_PWR_COMMAND="set_alink_tx.sh"       # Command to update tx power.
+UPDATE_TX_PWR_COMMAND="set_alink_tx_pwr.sh"       # Command to update tx power.
 
 MAX_BW=$(yaml-cli -i /etc/wfb.yaml -g .wireless.max_bw)
 
 # --- State Variables ---
 ENABLED=0
 
+# System active flag: becomes 1 once a valid command (HEARTBEAT, BITRATE, TX_PWR, or COMMAND ENABLE) is received.
+SYSTEM_ACTIVE=0
+
 # BITRATE variables
 CURRENT_BITRATE=0        # Last received bitrate (from BITRATE command)
-PREV_BITRATE=""          # Last BITRATE command that was accepted/issued.
+PREV_BITRATE=""          # Last accepted/issued bitrate
 BITRATE_DIRECTION="none" # "initial", "increased", "decreased", or "unchanged"
 
 # TX_PWR variables
 CURRENT_TX_PWR=0         # Last received tx power (from TX_PWR command)
-PREV_TX_PWR=""           # Last TX_PWR command that was accepted/issued.
+PREV_TX_PWR=""           # Last accepted/issued tx power
 TX_PWR_DIRECTION="none"  # "initial", "increased", "decreased", or "unchanged"
 
 INFO_STATE=""
@@ -79,26 +91,29 @@ FALLBACK_ISSUED=0           # To avoid repeatedly issuing fallback.
 # --- Main Loop ---
 # We use a read timeout (-t 1) so that even if no input is received we can check for heartbeat timeout.
 while true; do
-    now=$(date +%s)
-    elapsed=$(( now - LAST_HEARTBEAT ))
-    if [ "$elapsed" -gt "$FALLBACK_TIMEOUT" ] && [ "$FALLBACK_ISSUED" -eq 0 ]; then
-        debug "No heartbeat received for ${elapsed}s. Issuing fallback commands."
+    # Only run fallback logic if the system is active.
+    if [ "$SYSTEM_ACTIVE" -eq 1 ]; then
+        now=$(date +%s)
+        elapsed=$(( now - LAST_HEARTBEAT ))
+        if [ "$elapsed" -gt "$FALLBACK_TIMEOUT" ] && [ "$FALLBACK_ISSUED" -eq 0 ]; then
+            debug "No valid command received for ${elapsed}s. Issuing fallback commands."
 
-        # BITRATE fallback logic
-        BITRATE_DIRECTION="decreased"
-        CURRENT_BITRATE="$FALLBACK_BITRATE"
-        PREV_BITRATE="$FALLBACK_BITRATE"
-        $FALLBACK_COMMAND "$FALLBACK_BITRATE" 5 --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
-        debug "Fallback BITRATE command issued: setting bitrate to $FALLBACK_BITRATE, direction: $BITRATE_DIRECTION"
+            # BITRATE fallback logic
+            BITRATE_DIRECTION="decreased"
+            CURRENT_BITRATE="$FALLBACK_BITRATE"
+            PREV_BITRATE="$FALLBACK_BITRATE"
+            $FALLBACK_COMMAND "$FALLBACK_BITRATE" 5 --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
+            debug "Fallback BITRATE command issued: setting bitrate to $FALLBACK_BITRATE, direction: $BITRATE_DIRECTION"
 
-        # TX_PWR fallback logic
-        TX_PWR_DIRECTION="decreased"
-        CURRENT_TX_PWR="$FALLBACK_TX"
-        PREV_TX_PWR="$FALLBACK_TX"
-        $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "$TX_PWR_DIRECTION"
-        debug "Fallback TX_PWR command issued: setting tx power to $FALLBACK_TX, direction: $TX_PWR_DIRECTION"
+            # TX_PWR fallback logic
+            TX_PWR_DIRECTION="decreased"
+            CURRENT_TX_PWR="$FALLBACK_TX"
+            PREV_TX_PWR="$FALLBACK_TX"
+            $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "$TX_PWR_DIRECTION"
+            debug "Fallback TX_PWR command issued: setting tx power to $FALLBACK_TX, direction: $TX_PWR_DIRECTION"
 
-        FALLBACK_ISSUED=1
+            FALLBACK_ISSUED=1
+        fi
     fi
 
     # Attempt to read a command (fields separated by tabs). Timeout after 1 second.
@@ -106,14 +121,21 @@ while true; do
         debug "Received command: '$command', data1: '$data1', data2: '$data2'"
         case "$command" in
             HEARTBEAT)
-                # On heartbeat, update the timestamp and clear the fallback flag.
+                # Activate system if this is the first valid command.
+                if [ "$SYSTEM_ACTIVE" -eq 0 ]; then
+                    SYSTEM_ACTIVE=1
+                    debug "First valid command received: system activated."
+                fi
                 LAST_HEARTBEAT=$(date +%s)
                 FALLBACK_ISSUED=0
                 debug "HEARTBEAT processed. LAST_HEARTBEAT updated to $LAST_HEARTBEAT."
                 echo "ACK:HEARTBEAT\t$data1\tHeartbeat received"
                 ;;
             BITRATE)
-                # Update heartbeat timestamp (activity) and clear fallback flag.
+                if [ "$SYSTEM_ACTIVE" -eq 0 ]; then
+                    SYSTEM_ACTIVE=1
+                    debug "First valid command received: system activated."
+                fi
                 LAST_HEARTBEAT=$(date +%s)
                 FALLBACK_ISSUED=0
                 new_bitrate="$data2"
@@ -156,7 +178,10 @@ while true; do
                 fi
                 ;;
             TX_PWR)
-                # Process TX_PWR command similar to BITRATE.
+                if [ "$SYSTEM_ACTIVE" -eq 0 ]; then
+                    SYSTEM_ACTIVE=1
+                    debug "First valid command received: system activated."
+                fi
                 LAST_HEARTBEAT=$(date +%s)
                 FALLBACK_ISSUED=0
                 new_tx="$data2"
@@ -208,20 +233,36 @@ while true; do
                 echo "ACK:STATUS\t$data1\tStatus updated to: $STATUS_STATE"
                 ;;
             COMMAND)
-                # Handle additional COMMAND subcommands as needed.
                 case "$data2" in
                     ENABLE)
-                        ENABLED=1
-                        debug "COMMAND ENABLE processed. ENABLED set to 1."
+                        # Activate system if not already active.
+                        SYSTEM_ACTIVE=1
+                        LAST_HEARTBEAT=$(date +%s)
+                        FALLBACK_ISSUED=0
+                        debug "COMMAND ENABLE processed. System activated."
                         echo "ACK:COMMAND\t$data1\tEnabled"
                         ;;
                     DISABLE)
-                        ENABLED=0
-                        debug "COMMAND DISABLE processed. ENABLED set to 0."
+                        # Disable system: reset all state variables and issue safe commands.
+                        SYSTEM_ACTIVE=0
+                        CURRENT_BITRATE=0
+                        PREV_BITRATE=""
+                        BITRATE_DIRECTION="none"
+                        CURRENT_TX_PWR=0
+                        PREV_TX_PWR=""
+                        TX_PWR_DIRECTION="none"
+                        INFO_STATE=""
+                        STATUS_STATE=""
+                        LAST_HEARTBEAT=$(date +%s)
+                        FALLBACK_ISSUED=0
+                        debug "COMMAND DISABLE processed. System deactivated and states reset."
+                        # Issue safe default commands:
+                        set_alink_bitrate.sh 8000 5 --max_bw 20
+                        set_alink_tx_pwr.sh 5
                         echo "ACK:COMMAND\t$data1\tDisabled"
                         ;;
                     RESET)
-                        ENABLED=0
+                        # Reset state variables but leave system active.
                         CURRENT_BITRATE=0
                         PREV_BITRATE=""
                         BITRATE_DIRECTION="none"
