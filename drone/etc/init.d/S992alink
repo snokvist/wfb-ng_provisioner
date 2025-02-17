@@ -11,7 +11,7 @@ case "$1" in
             simple-alink)
                 echo "alink mode: simple-alink"
                 # Put the commands you need for starting 'simple-alink' here
-                wfb_bind_srv_armhf --udp 5557 0.0.0.0 simple_alink.sh &>/dev/null &
+                socket_srv --udp 5557 simple_alink.sh &>/dev/null &
                 ;;
             greg-alink)
                 echo "alink mode: greg-alink"
@@ -32,7 +32,7 @@ case "$1" in
         case "$alink" in
             simple-alink)
                 echo "Stopping simple-alink..."
-                killall -q wfb_bind_srv_armhf
+                killall -q socket_srv
                 ;;
             greg-alink)
                 echo "Stopping greg-alink..."
