@@ -37,8 +37,9 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 ![image](https://github.com/user-attachments/assets/1a9d4826-eae6-4a45-9abb-089b07da9fe4)
 
 ### Simple alink
-- Run on drone ./socket_srv --udp 5557 simple_alink.sh --verbose (remember to enable check for temp throttle!!! - Self reminder)
-- run on GS: ./simple_alink_ctrl_udp.py --verbose 1 --udp --udp_ip 10.5.0.10 --udp_port 5557
+- RUnning as service on drone
+- If you want to test the command, run on drone ./socket_srv --udp 5557 simple_alink.sh --verbose (remember to enable check for temp throttle!!! - Self reminder)
+- run on GS: ./simple_alink_ctrl.py --verbose 1 --udp --udp_ip 10.5.0.10 --udp_port 5557
 
 ### VTX info output
 ````
