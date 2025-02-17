@@ -63,9 +63,15 @@ FALLBACK_TX=8                   # Fallback tx power value.
 # Replace the commands below with your actual system commands.
 FALLBACK_COMMAND="set_alink_bitrate.sh"       # Command to call on bitrate fallback.
 UPDATE_BITRATE_COMMAND="set_alink_bitrate.sh" # Command to update bitrate.
-UPDATE_TX_PWR_COMMAND="set_alink_tx_pwr.sh"       # Command to update tx power.
+UPDATE_TX_PWR_COMMAND="set_alink_tx_pwr.sh"     # Command to update tx power.
 
 MAX_BW=$(yaml-cli -i /etc/wfb.yaml -g .wireless.max_bw)
+# Set MAX_MCS based on MAX_BW: if MAX_BW is 40, use 3, otherwise 5.
+if [ "$MAX_BW" -eq 40 ]; then
+    MAX_MCS=3
+else
+    MAX_MCS=5
+fi
 
 # --- State Variables ---
 ENABLED=0
@@ -98,11 +104,11 @@ while true; do
         if [ "$elapsed" -gt "$FALLBACK_TIMEOUT" ] && [ "$FALLBACK_ISSUED" -eq 0 ]; then
             debug "No valid command received for ${elapsed}s. Issuing fallback commands."
 
-            # BITRATE fallback logic
+            # BITRATE fallback logic using MAX_MCS instead of 5.
             BITRATE_DIRECTION="decreased"
             CURRENT_BITRATE="$FALLBACK_BITRATE"
             PREV_BITRATE="$FALLBACK_BITRATE"
-            $FALLBACK_COMMAND "$FALLBACK_BITRATE" 5 --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
+            $FALLBACK_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
             debug "Fallback BITRATE command issued: setting bitrate to $FALLBACK_BITRATE, direction: $BITRATE_DIRECTION"
 
             # TX_PWR fallback logic
@@ -169,7 +175,7 @@ while true; do
                 if [ "$accept" -eq 1 ]; then
                     PREV_BITRATE="$new_bitrate"
                     debug "BITRATE accepted. New bitrate: $new_bitrate, Direction: $BITRATE_DIRECTION."
-                    $UPDATE_BITRATE_COMMAND "$new_bitrate" 5 --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
+                    $UPDATE_BITRATE_COMMAND "$new_bitrate" $MAX_MCS --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
                     echo "ACK:BITRATE\t$data1\tBitrate updated to $new_bitrate ($BITRATE_DIRECTION)"
                     debug "System command issued to update bitrate to $new_bitrate."
                 else

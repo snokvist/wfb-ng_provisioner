@@ -114,10 +114,11 @@ fi
 # --- Call bitrate_calculator.sh ---
 # We now pass the optional --max_bw parameter.
 RESULT=$(bitrate_calculator.sh "$TARGET" "$fec_ratio" "$max_mcs" --cap "$CAP" --gi long --max_bw "$MAX_BW")
+#echo ""$TARGET" "$fec_ratio" "$max_mcs" --cap "$CAP" --gi long --max_bw "$MAX_BW" and exit code $?"
 if [ $? -ne 0 ]; then
     echo "Error: bitrate_calculator.sh failed. Setting fallback, please retry with a lower bitrate."
     #Fallback
-    set_bitrate.sh 3000 0 --max_bw 20
+    set_bitrate.sh 2800 0 --max_bw 20
     exit 1
 fi
 
