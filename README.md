@@ -38,7 +38,7 @@ By default, connect.py will try connect to 10.5.0.10 port 5555 for provisioning.
 
 ### Simple alink
 - Run on drone wfb_bind_srv_armhf --udp 5557 0.0.0.0 simple_alink.sh --verbose (remember to enable check for temp throttle!!! - Self reminder)
-- run on GS: ./wfb_bind_srv --client --udp 5557 10.5.0.10 ./alink_tester.py --udp
+- run on GS: ./wfb_bind_srv --client --udp 5557 10.5.0.10 ./simple_alink_ctrl.py --udp
 
 ### VTX info output
 ````
