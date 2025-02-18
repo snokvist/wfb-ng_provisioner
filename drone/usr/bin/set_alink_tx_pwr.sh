@@ -61,9 +61,16 @@ if [ -z "$MCS_TX_PWR" ]; then
     exit 1
 fi
 
+#!/bin/sh
+# --- Parameters for TX power multiplier ---
+DEFAULT_MULT=50   # Used for non-88XXau adapters
+ALT_MULT=100      # Used for 88XXau adapter (TX power will be negative)
+
 # --- Check wifi adapter type ---
 WIFI_ADAPTER=$(yaml-cli -i /etc/vtx_info.yaml -g .wifi.wifi_adapter)
 if [ "$WIFI_ADAPTER" = "88XXau" ]; then
+    MULTIPLIER=$ALT_MULT
+    # Force MCS_TX_PWR to be negative if not already.
     case "$MCS_TX_PWR" in
         -*)
             # Already negative.
@@ -72,12 +79,15 @@ if [ "$WIFI_ADAPTER" = "88XXau" ]; then
             MCS_TX_PWR="-${MCS_TX_PWR}"
             ;;
     esac
+else
+    MULTIPLIER=$DEFAULT_MULT
 fi
 
 # --- Set the TX power ---
-echo "Setting TX power to $MCS_TX_PWR ("$((MCS_TX_PWR * 50))") (mcs${MCS_INDEX}, adapter: $WIFI_ADAPTER, direction: $DIRECTION)"
-iw wlan0 set txpower fixed "$((MCS_TX_PWR * 50))"
-
+# Multiplication in shell arithmetic handles negatives correctly.
+TXPOWER=$(( MCS_TX_PWR * MULTIPLIER ))
+echo "Setting TX power to $MCS_TX_PWR ($TXPOWER) (mcs${MCS_INDEX}, adapter: $WIFI_ADAPTER, direction: $DIRECTION)"
+iw wlan0 set txpower fixed "$TXPOWER"
 
 
 exit 0
