@@ -22,6 +22,14 @@ TX_RSSI_MAX = -40     # highest RSSI (best signal)
 TX_PWR_HIGH = 9       # highest TX power (when RSSI is very low)
 TX_PWR_LOW = 1        # lowest TX power (when RSSI is high)
 
+# Thresholds for REC_LOST command:
+REC_THRESHOLD_FEC = 10  # If fec_rec (first tuple) is above 10, trigger REC_LOST
+REC_THRESHOLD_LOST = 5  # If lost (first tuple) is above 5, trigger REC_LOST
+
+# Moving average window size for RSSI:
+RSSI_MOVING_AVG_WINDOW = 5
+rssi_history = []
+
 # Global sequence number for all commands sent.
 seq_num = 0
 seq_lock = threading.Lock()  # For thread-safe sequence increments
@@ -102,8 +110,8 @@ def map_rssi_to_tx_power(rssi, tx_rssi_min=TX_RSSI_MIN, tx_rssi_max=TX_RSSI_MAX,
                          tx_power_low=TX_PWR_LOW, tx_power_high=TX_PWR_HIGH):
     """
     Map an RSSI value (rssi_avg) to a TX power value.
-    When RSSI is low (e.g. -90 dBm), TX power is high (7).
-    When RSSI is high (e.g. -40 dBm), TX power is low (1).
+    When RSSI is low (e.g. -90 dBm), TX power is high.
+    When RSSI is high (e.g. -40 dBm), TX power is low.
     Linearly interpolate (inverted) between these limits.
     """
     if rssi <= tx_rssi_min:
@@ -115,7 +123,6 @@ def map_rssi_to_tx_power(rssi, tx_rssi_min=TX_RSSI_MIN, tx_rssi_max=TX_RSSI_MAX,
     tx_power = tx_power_high - ratio * (tx_power_high - tx_power_low)
     return int(round(tx_power))
 
-# --- Command-Sending Functions ---
 def send_bitrate(bitrate):
     """
     Send a BITRATE command with the computed bitrate.
@@ -133,6 +140,16 @@ def send_tx_power(tx_power):
     """
     seq = get_next_seq()
     command_str = f"TX_PWR\t{seq}\t{tx_power}"
+    if safe_send(command_str):
+        log(1, f"[CMD SENT] {command_str}")
+
+def send_rec_lost(fec_val, lost_val):
+    """
+    Send a REC_LOST command with the given fec_rec and lost values.
+    Format: REC_LOST<TAB>sequence<TAB>fec_val<TAB>lost_val
+    """
+    seq = get_next_seq()
+    command_str = f"REC_LOST\t{seq}\t{fec_val}\t{lost_val}"
     if safe_send(command_str):
         log(1, f"[CMD SENT] {command_str}")
 
@@ -174,7 +191,6 @@ def send_command_action(action):
     if safe_send(command_str):
         log(1, f"[CMD SENT] {command_str}")
 
-# --- ACK Message Parsing ---
 def parse_ack_message(line):
     """
     Parse an ack message from STDIN and echo it.
@@ -210,12 +226,12 @@ def ack_listener():
                 break
         parse_ack_message(line)
 
-# --- Socket (JSON Stream) Listener ---
 def socket_listener():
     """
     Connect to the JSON stream on port 8103 and process incoming JSON messages.
     If the connection is lost, reconnect every 3 seconds.
     """
+    global rssi_history
     while not shutdown_event.is_set():
         try:
             log(2, f"[SOCKET] Connecting to JSON stream at {HOST}:{PORT}...")
@@ -249,9 +265,21 @@ def socket_listener():
                 if data.get("type") == "rx":
                     msg_id = data.get("id", "")
                     if msg_id == "video rx":
-                        # --- Process "packets" ---
+                        # --- Process "packets" for REC_LOST command ---
                         packets = data.get("packets", {})
+                        rec_triggered = False
                         if packets:
+                            # Check for REC_LOST condition using first tuple from fec_rec and lost.
+                            fec_rec = packets.get("fec_rec")
+                            lost = packets.get("lost")
+                            if isinstance(fec_rec, list) and len(fec_rec) > 0 and isinstance(lost, list) and len(lost) > 0:
+                                fec_val = fec_rec[0]
+                                lost_val = lost[0]
+                                if fec_val > REC_THRESHOLD_FEC or lost_val > REC_THRESHOLD_LOST:
+                                    send_rec_lost(fec_val, lost_val)
+                                    rec_triggered = True
+
+                            # Also log packets info at detailed level.
                             first_key = next(iter(packets))
                             tuple_vals = packets[first_key]
                             if isinstance(tuple_vals, list) and len(tuple_vals) >= 2:
@@ -262,7 +290,7 @@ def socket_listener():
                         else:
                             log(2, "[SOCKET] No 'packets' data available.")
 
-                        # --- Process "rx_ant_stats" to find the antenna with the highest rssi_avg ---
+                        # --- Process "rx_ant_stats" to get best RSSI ---
                         ant_stats = data.get("rx_ant_stats", [])
                         if not ant_stats:
                             log(2, "[SOCKET] No rx_ant_stats available.")
@@ -271,11 +299,20 @@ def socket_listener():
                         best_ant = max(ant_stats, key=lambda ant: ant.get("rssi_avg", -1000))
                         best_rssi = best_ant.get("rssi_avg", -1000)
                         log(2, f"[SOCKET] Best antenna stats: {best_ant}")
-                        target_bitrate = map_rssi_to_bitrate(best_rssi)
-                        target_tx_power = map_rssi_to_tx_power(best_rssi)
-                        log(2, f"[SOCKET] Best rssi: {best_rssi} dBm, computed bitrate: {target_bitrate}, computed TX_PWR: {target_tx_power}")
 
-                        # --- Send BITRATE and TX_PWR commands with the computed values ---
+                        # --- Update moving average ---
+                        rssi_history.append(best_rssi)
+                        if len(rssi_history) > RSSI_MOVING_AVG_WINDOW:
+                            rssi_history.pop(0)
+                        avg_rssi = round(sum(rssi_history) / len(rssi_history))
+                        log(2, f"[SOCKET] Updated RSSI moving average: {avg_rssi} (from history: {rssi_history})")
+
+                        # --- Compute commands using moving average ---
+                        target_bitrate = map_rssi_to_bitrate(avg_rssi)
+                        target_tx_power = map_rssi_to_tx_power(avg_rssi)
+                        log(2, f"[SOCKET] Using avg RSSI: {avg_rssi} dBm, computed bitrate: {target_bitrate}, computed TX_PWR: {target_tx_power}")
+
+                        # --- Send BITRATE and TX_PWR commands ---
                         send_bitrate(target_bitrate)
                         send_tx_power(target_tx_power)
                     else:
@@ -290,8 +327,7 @@ def socket_listener():
             except Exception:
                 pass
             time.sleep(3)
-
-# --- Heartbeat Sender ---
+            
 def heartbeat_sender(interval):
     """
     Periodically send HEARTBEAT messages every 'interval' seconds.
@@ -301,12 +337,11 @@ def heartbeat_sender(interval):
         send_heartbeat()
         time.sleep(interval)
 
-# --- Main ---
 def main():
     global VERBOSITY, HEARTBEAT_INTERVAL, UDP_MODE, udp_socket, udp_ip, udp_port
 
     parser = argparse.ArgumentParser(
-        description="JSON Stream Client with periodic HEARTBEAT messages")
+        description="JSON Stream Client with periodic HEARTBEAT messages and REC_LOST detection")
     parser.add_argument("--heartbeat", type=float, default=0.25,
                         help="Heartbeat interval in seconds (default: 0.25)")
     parser.add_argument("--verbose", type=int, default=0,
