@@ -55,6 +55,15 @@ else
   vtx_name=$(echo "$vtx_name_raw" | awk -F '=' '{print $2}')
 fi
 
+# 6. master_groundstation: use fw_printenv master_groundstation:; if not defined, set default.
+master_groundstation_raw=$(fw_printenv master_groundstation 2>&1)
+if echo "$master_groundstation_raw" | grep -qi "not defined"; then
+  master_groundstation="none"
+else
+  master_groundstation=$(echo "$master_groundstation_raw" | awk -F '=' '{print $2}')
+fi
+
+
 ########################################
 # Validate or set default wifi_profile   #
 ########################################
@@ -189,6 +198,8 @@ yaml-cli -i "$YAML_FILE" -s vtx_id "$vtx_id"
 yaml-cli -i "$YAML_FILE" -s vtx_name $vtx_name
 yaml-cli -i "$YAML_FILE" -s build_option "$build_option"
 yaml-cli -i "$YAML_FILE" -s soc "$soc"
+yaml-cli -i "$YAML_FILE" -s master_groundstation "$master_groundstation"
+
 
 
 # Wi‑Fi section.

@@ -201,7 +201,7 @@ case "$1" in
         video_settings
         ;;
     *)
-        echo "Usage: $0 {start|stop|reset}"
+        echo "Usage: $0 {start|stop|reset|bind}"
         exit 1
         ;;
 esac
