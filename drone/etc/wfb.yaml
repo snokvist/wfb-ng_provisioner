@@ -35,4 +35,4 @@ tunnel:
 telemetry:
   router: msposd
   serial: /dev/ttyS2
-  osd_fps: 20
+  osd_fps: 1010
