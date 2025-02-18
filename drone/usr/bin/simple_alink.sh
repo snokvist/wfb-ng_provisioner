@@ -3,7 +3,7 @@
 # Usage: simple_alink.sh [--verbose]
 #
 # This script processes tab-delimited commands from STDIN.
-# It focuses on HEARTBEAT, BITRATE, and TX_PWR commands and includes state logic.
+# It focuses on HEARTBEAT, BITRATE, TX_PWR, and REC_LOST messages and includes state logic.
 #
 # HEARTBEAT:
 #   - Updates the last heartbeat timestamp.
@@ -16,6 +16,8 @@
 #   - If the change is significant, it determines whether the bitrate has
 #     increased or decreased, updates state, and calls a system command
 #     to update the bitrate.
+#   - If the new bitrate exceeds MAX_ACCEPTABLE_BITRATE or is below MIN_ACCEPTABLE_BITRATE,
+#     those limits are enforced.
 #
 # TX_PWR:
 #   - Updates the last heartbeat timestamp.
@@ -24,6 +26,9 @@
 #   - If the change is significant, it determines whether the tx power has
 #     increased or decreased, updates state, and calls a system command
 #     to update the tx power.
+#
+# REC_LOST:
+#   - Simply echoes back the received REC_LOST message and its content.
 #
 # Fallback:
 #   - If more than FALLBACK_TIMEOUT seconds elapse without any valid command,
@@ -55,10 +60,12 @@ debug "Verbose mode enabled. Starting command listener with state logic."
 
 # --- Configuration Parameters ---
 FALLBACK_TIMEOUT=1              # Seconds to wait for heartbeat before fallback.
-BITRATE_DIFF_THRESHOLD=2000     # Minimum difference to accept a new bitrate.
+BITRATE_DIFF_THRESHOLD=3000     # Minimum difference to accept a new bitrate.
 TX_PWR_DIFF_THRESHOLD=2         # Minimum difference to accept a new tx power change.
 FALLBACK_BITRATE=3000           # Fallback bitrate value.
 FALLBACK_TX=8                   # Fallback tx power value.
+MAX_ACCEPTABLE_BITRATE=12000    # Maximum allowed bitrate.
+MIN_ACCEPTABLE_BITRATE=4500     # Minimum allowed bitrate.
 
 # Replace the commands below with your actual system commands.
 FALLBACK_COMMAND="set_alink_bitrate.sh"       # Command to call on bitrate fallback.
@@ -96,6 +103,7 @@ FALLBACK_ISSUED=0           # To avoid repeatedly issuing fallback.
 
 # --- Main Loop ---
 # We use a read timeout (-t 1) so that even if no input is received we can check for heartbeat timeout.
+# Reading up to four tab-separated fields allows us to capture REC_LOST messages.
 while true; do
     # Only run fallback logic if the system is active.
     if [ "$SYSTEM_ACTIVE" -eq 1 ]; then
@@ -104,14 +112,14 @@ while true; do
         if [ "$elapsed" -gt "$FALLBACK_TIMEOUT" ] && [ "$FALLBACK_ISSUED" -eq 0 ]; then
             debug "No valid command received for ${elapsed}s. Issuing fallback commands."
 
-            # BITRATE fallback logic using MAX_MCS instead of 5.
+            # BITRATE fallback logic using MAX_MCS.
             BITRATE_DIRECTION="decreased"
             CURRENT_BITRATE="$FALLBACK_BITRATE"
             PREV_BITRATE="$FALLBACK_BITRATE"
             $FALLBACK_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
             debug "Fallback BITRATE command issued: setting bitrate to $FALLBACK_BITRATE, direction: $BITRATE_DIRECTION"
 
-            # TX_PWR fallback logic
+            # TX_PWR fallback logic.
             TX_PWR_DIRECTION="decreased"
             CURRENT_TX_PWR="$FALLBACK_TX"
             PREV_TX_PWR="$FALLBACK_TX"
@@ -123,8 +131,8 @@ while true; do
     fi
 
     # Attempt to read a command (fields separated by tabs). Timeout after 1 second.
-    if IFS=$'\t' read -t 1 -r command data1 data2; then
-        debug "Received command: '$command', data1: '$data1', data2: '$data2'"
+    if IFS=$'\t' read -t 1 -r command data1 data2 data3; then
+        debug "Received command: '$command', data1: '$data1', data2: '$data2', data3: '$data3'"
         case "$command" in
             HEARTBEAT)
                 # Activate system if this is the first valid command.
@@ -145,6 +153,17 @@ while true; do
                 LAST_HEARTBEAT=$(date +%s)
                 FALLBACK_ISSUED=0
                 new_bitrate="$data2"
+
+                # Enforce maximum and minimum bitrate limits.
+                if [ "$new_bitrate" -gt "$MAX_ACCEPTABLE_BITRATE" ]; then
+                    debug "New bitrate $new_bitrate exceeds maximum limit $MAX_ACCEPTABLE_BITRATE, using max instead."
+                    new_bitrate="$MAX_ACCEPTABLE_BITRATE"
+                fi
+                if [ "$new_bitrate" -lt "$MIN_ACCEPTABLE_BITRATE" ]; then
+                    debug "New bitrate $new_bitrate is below minimum limit $MIN_ACCEPTABLE_BITRATE, using min instead."
+                    new_bitrate="$MIN_ACCEPTABLE_BITRATE"
+                fi
+
                 CURRENT_BITRATE="$new_bitrate"
                 accept=0
 
@@ -227,6 +246,10 @@ while true; do
                     debug "TX_PWR change not significant (difference < $TX_PWR_DIFF_THRESHOLD). Command ignored."
                     echo "ACK:TX_PWR\t$data1\tTx power change ignored; not significant"
                 fi
+                ;;
+            REC_LOST)
+                debug "REC_LOST message received: seq=$data1, rec data=$data2, lost data=$data3"
+                echo "ACK:REC_LOST\t$data1\t$data2\t$data3"
                 ;;
             INFO)
                 INFO_STATE="$data2"

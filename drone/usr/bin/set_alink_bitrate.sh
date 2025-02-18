@@ -152,7 +152,7 @@ else
       -L $(yaml-cli -i /etc/wfb.yaml -g .broadcast.ldpc_tx) \
       -M ${candidate_mcs}
     wfb_tx_cmd 8000 set_fec -k ${fec_k} -n ${fec_n}
-    sleep 1
+    sleep 0.2
     ## --- Update Majestic Online ---
     curl -s localhost/api/v1/set?video0.bitrate=$TARGET 2> /dev/null
 fi
