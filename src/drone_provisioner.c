@@ -619,9 +619,12 @@ int main(int argc, char *argv[]) {
         char *line = NULL;
         size_t linecap = 0;
         while (getline(&line, &linecap, client_file) != -1) {
-            size_t len = strlen(line);
-            if (len > 0 && line[len - 1] == '\n')
-                line[len - 1] = '\0';  // normal command protocol usage
+	size_t len = strlen(line);
+	/* Remove any trailing newline and carriage return characters */
+	while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+	    line[len - 1] = '\0';
+	    len--;
+	}
 
             char *cmd = line;
             char *arg = NULL;
