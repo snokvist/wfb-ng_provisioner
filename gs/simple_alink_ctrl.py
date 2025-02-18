@@ -19,7 +19,7 @@ BITRATE_LOW = 6000    # lowest bitrate value
 # Mapping parameters for TX power:
 TX_RSSI_MIN = -90     # lowest RSSI (worst signal)
 TX_RSSI_MAX = -40     # highest RSSI (best signal)
-TX_PWR_HIGH = 7       # highest TX power (when RSSI is very low)
+TX_PWR_HIGH = 9       # highest TX power (when RSSI is very low)
 TX_PWR_LOW = 1        # lowest TX power (when RSSI is high)
 
 # Global sequence number for all commands sent.
