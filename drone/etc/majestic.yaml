@@ -4,7 +4,7 @@ system:
   logLevel: debug
 isp:
   antiFlicker: disabled
-  sensorConfig: /etc/sensors/gregSpike05-2-lessblue.bin
+  sensorConfig: /etc/sensors/imx335.bin
   exposure: 11
 image:
   mirror: false
@@ -17,8 +17,8 @@ image:
 video0:
   enabled: true
   codec: h265
-  fps: 59
-  size: 1440x1080
+  fps: 90
+  size: 1920x1080
   bitrate: 8000
   rcMode: cbr
   gopSize: 1.0
