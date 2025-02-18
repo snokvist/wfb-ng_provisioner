@@ -11,21 +11,18 @@
 #
 # BITRATE:
 #   - Updates the last heartbeat timestamp.
-#   - Checks if the new bitrate (data2) differs from the last issued
-#     bitrate by at least BITRATE_DIFF_THRESHOLD.
-#   - If the change is significant, it determines whether the bitrate has
-#     increased or decreased, updates state, and calls a system command
-#     to update the bitrate.
-#   - If the new bitrate exceeds MAX_ACCEPTABLE_BITRATE or is below MIN_ACCEPTABLE_BITRATE,
-#     those limits are enforced.
+#   - Checks if the new bitrate (data2) differs from the last issued bitrate by at least BITRATE_DIFF_THRESHOLD.
+#   - If the change is significant, it determines whether the bitrate has increased or decreased,
+#     updates state, and calls a system command to update the bitrate.
+#   - If the new bitrate is below MIN_ACCEPTABLE_BITRATE or above MAX_ACCEPTABLE_BITRATE,
+#     the value is clamped and that extreme is triggered only once.
 #
 # TX_PWR:
 #   - Updates the last heartbeat timestamp.
-#   - Checks if the new tx power (data2) differs from the last issued
-#     tx power by at least TX_PWR_DIFF_THRESHOLD.
-#   - If the change is significant, it determines whether the tx power has
-#     increased or decreased, updates state, and calls a system command
-#     to update the tx power.
+#   - Checks if the new tx power (data2) differs from the last issued tx power by at least TX_PWR_DIFF_THRESHOLD.
+#   - If the change is significant, it determines whether the tx power has increased or decreased,
+#     updates state, and calls a system command to update the tx power.
+#   - Extreme values (below MIN or above MAX) are clamped and only trigger an update once.
 #
 # REC_LOST:
 #   - Simply echoes back the received REC_LOST message and its content.
@@ -60,12 +57,14 @@ debug "Verbose mode enabled. Starting command listener with state logic."
 
 # --- Configuration Parameters ---
 FALLBACK_TIMEOUT=1              # Seconds to wait for heartbeat before fallback.
-BITRATE_DIFF_THRESHOLD=3000     # Minimum difference to accept a new bitrate.
+BITRATE_DIFF_THRESHOLD=2000     # Minimum difference to accept a new bitrate.
 TX_PWR_DIFF_THRESHOLD=2         # Minimum difference to accept a new tx power change.
 FALLBACK_BITRATE=3000           # Fallback bitrate value.
 FALLBACK_TX=8                   # Fallback tx power value.
 MAX_ACCEPTABLE_BITRATE=12000    # Maximum allowed bitrate.
 MIN_ACCEPTABLE_BITRATE=4500     # Minimum allowed bitrate.
+MAX_ACCEPTABLE_TX_PWR=9         # Maximum allowed tx power.
+MIN_ACCEPTABLE_TX_PWR=2         # Minimum allowed tx power.
 
 # Replace the commands below with your actual system commands.
 FALLBACK_COMMAND="set_alink_bitrate.sh"       # Command to call on bitrate fallback.
@@ -73,7 +72,7 @@ UPDATE_BITRATE_COMMAND="set_alink_bitrate.sh" # Command to update bitrate.
 UPDATE_TX_PWR_COMMAND="set_alink_tx_pwr.sh"     # Command to update tx power.
 
 MAX_BW=$(yaml-cli -i /etc/wfb.yaml -g .wireless.max_bw)
-# Set MAX_MCS based on MAX_BW: if MAX_BW is 40, use 3, otherwise 5.
+# Set MAX_MCS based on MAX_BW: if MAX_BW is 40, use 3; otherwise 5.
 if [ "$MAX_BW" -eq 40 ]; then
     MAX_MCS=3
 else
@@ -90,11 +89,15 @@ SYSTEM_ACTIVE=0
 CURRENT_BITRATE=0        # Last received bitrate (from BITRATE command)
 PREV_BITRATE=""          # Last accepted/issued bitrate
 BITRATE_DIRECTION="none" # "initial", "increased", "decreased", or "unchanged"
+BITRATE_AT_MIN=0         # Flag: 1 if bitrate has been clamped to min
+BITRATE_AT_MAX=0         # Flag: 1 if bitrate has been clamped to max
 
 # TX_PWR variables
 CURRENT_TX_PWR=0         # Last received tx power (from TX_PWR command)
 PREV_TX_PWR=""           # Last accepted/issued tx power
 TX_PWR_DIRECTION="none"  # "initial", "increased", "decreased", or "unchanged"
+TX_PWR_AT_MIN=0          # Flag: 1 if tx power has been clamped to min
+TX_PWR_AT_MAX=0          # Flag: 1 if tx power has been clamped to max
 
 INFO_STATE=""
 STATUS_STATE=""
@@ -126,6 +129,12 @@ while true; do
             $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "$TX_PWR_DIRECTION"
             debug "Fallback TX_PWR command issued: setting tx power to $FALLBACK_TX, direction: $TX_PWR_DIRECTION"
 
+            # Reset extreme flags after fallback so new values are processed normally.
+            BITRATE_AT_MIN=0
+            BITRATE_AT_MAX=0
+            TX_PWR_AT_MIN=0
+            TX_PWR_AT_MAX=0
+
             FALLBACK_ISSUED=1
         fi
     fi
@@ -154,40 +163,55 @@ while true; do
                 FALLBACK_ISSUED=0
                 new_bitrate="$data2"
 
-                # Enforce maximum and minimum bitrate limits.
-                if [ "$new_bitrate" -gt "$MAX_ACCEPTABLE_BITRATE" ]; then
-                    debug "New bitrate $new_bitrate exceeds maximum limit $MAX_ACCEPTABLE_BITRATE, using max instead."
+                # Enforce extreme limits for BITRATE.
+                if [ "$new_bitrate" -ge "$MAX_ACCEPTABLE_BITRATE" ]; then
+                    debug "New bitrate $new_bitrate is equal to or exceeds maximum limit $MAX_ACCEPTABLE_BITRATE, using max instead."
                     new_bitrate="$MAX_ACCEPTABLE_BITRATE"
-                fi
-                if [ "$new_bitrate" -lt "$MIN_ACCEPTABLE_BITRATE" ]; then
-                    debug "New bitrate $new_bitrate is below minimum limit $MIN_ACCEPTABLE_BITRATE, using min instead."
-                    new_bitrate="$MIN_ACCEPTABLE_BITRATE"
-                fi
-
-                CURRENT_BITRATE="$new_bitrate"
-                accept=0
-
-                if [ -z "$PREV_BITRATE" ]; then
-                    # First bitrate received is always accepted.
-                    accept=1
-                    BITRATE_DIRECTION="initial"
-                else
-                    # Calculate absolute difference between new and previous bitrate.
-                    diff=$(( new_bitrate - PREV_BITRATE ))
-                    if [ $diff -lt 0 ]; then
-                        diff=$(( -diff ))
-                    fi
-                    if [ "$diff" -ge "$BITRATE_DIFF_THRESHOLD" ]; then
+                    if [ "$BITRATE_AT_MAX" -eq 0 ]; then
+                        BITRATE_AT_MAX=1
+                        BITRATE_AT_MIN=0
                         accept=1
-                        if [ "$new_bitrate" -gt "$PREV_BITRATE" ]; then
-                            BITRATE_DIRECTION="increased"
-                        elif [ "$new_bitrate" -lt "$PREV_BITRATE" ]; then
-                            BITRATE_DIRECTION="decreased"
-                        else
-                            BITRATE_DIRECTION="unchanged"
-                        fi
+                        BITRATE_DIRECTION="increased"
                     else
                         accept=0
+                        debug "Already at max bitrate; ignoring update."
+                    fi
+                elif [ "$new_bitrate" -le "$MIN_ACCEPTABLE_BITRATE" ]; then
+                    debug "New bitrate $new_bitrate is equal to or below minimum limit $MIN_ACCEPTABLE_BITRATE, using min instead."
+                    new_bitrate="$MIN_ACCEPTABLE_BITRATE"
+                    if [ "$BITRATE_AT_MIN" -eq 0 ]; then
+                        BITRATE_AT_MIN=1
+                        BITRATE_AT_MAX=0
+                        accept=1
+                        BITRATE_DIRECTION="decreased"
+                    else
+                        accept=0
+                        debug "Already at min bitrate; ignoring update."
+                    fi
+                else
+                    # New bitrate is within allowed range; clear extreme flags.
+                    BITRATE_AT_MIN=0
+                    BITRATE_AT_MAX=0
+                    if [ -z "$PREV_BITRATE" ]; then
+                        accept=1
+                        BITRATE_DIRECTION="initial"
+                    else
+                        diff=$(( new_bitrate - PREV_BITRATE ))
+                        if [ $diff -lt 0 ]; then
+                            diff=$(( -diff ))
+                        fi
+                        if [ "$diff" -ge "$BITRATE_DIFF_THRESHOLD" ]; then
+                            accept=1
+                            if [ "$new_bitrate" -gt "$PREV_BITRATE" ]; then
+                                BITRATE_DIRECTION="increased"
+                            elif [ "$new_bitrate" -lt "$PREV_BITRATE" ]; then
+                                BITRATE_DIRECTION="decreased"
+                            else
+                                BITRATE_DIRECTION="unchanged"
+                            fi
+                        else
+                            accept=0
+                        fi
                     fi
                 fi
 
@@ -198,7 +222,7 @@ while true; do
                     echo "ACK:BITRATE\t$data1\tBitrate updated to $new_bitrate ($BITRATE_DIRECTION)"
                     debug "System command issued to update bitrate to $new_bitrate."
                 else
-                    debug "BITRATE change not significant (difference < $BITRATE_DIFF_THRESHOLD). Command ignored."
+                    debug "BITRATE change not significant or already at extreme; command ignored."
                     echo "ACK:BITRATE\t$data1\tBitrate change ignored; not significant"
                 fi
                 ;;
@@ -210,29 +234,56 @@ while true; do
                 LAST_HEARTBEAT=$(date +%s)
                 FALLBACK_ISSUED=0
                 new_tx="$data2"
-                CURRENT_TX_PWR="$new_tx"
-                accept_tx=0
 
-                if [ -z "$PREV_TX_PWR" ]; then
-                    accept_tx=1
-                    TX_PWR_DIRECTION="initial"
-                else
-                    # Calculate absolute difference between new and previous tx power.
-                    diff_tx=$(( new_tx - PREV_TX_PWR ))
-                    if [ $diff_tx -lt 0 ]; then
-                        diff_tx=$(( -diff_tx ))
-                    fi
-                    if [ "$diff_tx" -ge "$TX_PWR_DIFF_THRESHOLD" ]; then
+                # Enforce extreme limits for TX_PWR.
+                if [ "$new_tx" -ge "$MAX_ACCEPTABLE_TX_PWR" ]; then
+                    debug "New TX_PWR $new_tx is equal to or exceeds maximum limit $MAX_ACCEPTABLE_TX_PWR, using max instead."
+                    new_tx="$MAX_ACCEPTABLE_TX_PWR"
+                    if [ "$TX_PWR_AT_MAX" -eq 0 ]; then
+                        TX_PWR_AT_MAX=1
+                        TX_PWR_AT_MIN=0
                         accept_tx=1
-                        if [ "$new_tx" -gt "$PREV_TX_PWR" ]; then
-                            TX_PWR_DIRECTION="increased"
-                        elif [ "$new_tx" -lt "$PREV_TX_PWR" ]; then
-                            TX_PWR_DIRECTION="decreased"
-                        else
-                            TX_PWR_DIRECTION="unchanged"
-                        fi
+                        TX_PWR_DIRECTION="increased"
                     else
                         accept_tx=0
+                        debug "Already at max TX_PWR; ignoring update."
+                    fi
+                elif [ "$new_tx" -le "$MIN_ACCEPTABLE_TX_PWR" ]; then
+                    debug "New TX_PWR $new_tx is equal to or below minimum limit $MIN_ACCEPTABLE_TX_PWR, using min instead."
+                    new_tx="$MIN_ACCEPTABLE_TX_PWR"
+                    if [ "$TX_PWR_AT_MIN" -eq 0 ]; then
+                        TX_PWR_AT_MIN=1
+                        TX_PWR_AT_MAX=0
+                        accept_tx=1
+                        TX_PWR_DIRECTION="decreased"
+                    else
+                        accept_tx=0
+                        debug "Already at min TX_PWR; ignoring update."
+                    fi
+                else
+                    # New tx power is within allowed range; clear extreme flags.
+                    TX_PWR_AT_MIN=0
+                    TX_PWR_AT_MAX=0
+                    if [ -z "$PREV_TX_PWR" ]; then
+                        accept_tx=1
+                        TX_PWR_DIRECTION="initial"
+                    else
+                        diff_tx=$(( new_tx - PREV_TX_PWR ))
+                        if [ $diff_tx -lt 0 ]; then
+                            diff_tx=$(( -diff_tx ))
+                        fi
+                        if [ "$diff_tx" -ge "$TX_PWR_DIFF_THRESHOLD" ]; then
+                            accept_tx=1
+                            if [ "$new_tx" -gt "$PREV_TX_PWR" ]; then
+                                TX_PWR_DIRECTION="increased"
+                            elif [ "$new_tx" -lt "$PREV_TX_PWR" ]; then
+                                TX_PWR_DIRECTION="decreased"
+                            else
+                                TX_PWR_DIRECTION="unchanged"
+                            fi
+                        else
+                            accept_tx=0
+                        fi
                     fi
                 fi
 
@@ -243,7 +294,7 @@ while true; do
                     echo "ACK:TX_PWR\t$data1\tTx power updated to $new_tx ($TX_PWR_DIRECTION)"
                     debug "System command issued to update tx power to $new_tx."
                 else
-                    debug "TX_PWR change not significant (difference < $TX_PWR_DIFF_THRESHOLD). Command ignored."
+                    debug "TX_PWR change not significant or already at extreme; command ignored."
                     echo "ACK:TX_PWR\t$data1\tTx power change ignored; not significant"
                 fi
                 ;;
@@ -277,9 +328,13 @@ while true; do
                         CURRENT_BITRATE=0
                         PREV_BITRATE=""
                         BITRATE_DIRECTION="none"
+                        BITRATE_AT_MIN=0
+                        BITRATE_AT_MAX=0
                         CURRENT_TX_PWR=0
                         PREV_TX_PWR=""
                         TX_PWR_DIRECTION="none"
+                        TX_PWR_AT_MIN=0
+                        TX_PWR_AT_MAX=0
                         INFO_STATE=""
                         STATUS_STATE=""
                         LAST_HEARTBEAT=$(date +%s)
@@ -295,9 +350,13 @@ while true; do
                         CURRENT_BITRATE=0
                         PREV_BITRATE=""
                         BITRATE_DIRECTION="none"
+                        BITRATE_AT_MIN=0
+                        BITRATE_AT_MAX=0
                         CURRENT_TX_PWR=0
                         PREV_TX_PWR=""
                         TX_PWR_DIRECTION="none"
+                        TX_PWR_AT_MIN=0
+                        TX_PWR_AT_MAX=0
                         INFO_STATE=""
                         STATUS_STATE=""
                         LAST_HEARTBEAT=$(date +%s)
