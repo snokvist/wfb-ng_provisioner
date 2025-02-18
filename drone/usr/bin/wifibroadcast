@@ -131,8 +131,9 @@ start_telemetry() {
     if [ "$(ipcinfo -c)" = "ssc33x" ]; then
         devmem 0x1F207890 16 0x8
     fi
-
-    if [ "$router" = "msposd" ]; then
+    
+    
+    if [ "$TELEMETRY_ROUTER" = "msposd" ]; then
         echo "- Starting $TELEMETRY_ROUTER"
         size=$(yaml-cli -i /etc/majestic.yaml -g .video0.size)
         msposd --baudrate 115200 --channels 8 --ahi 0 -osd -r "$TELEMETRY_OSD_FPS" \
