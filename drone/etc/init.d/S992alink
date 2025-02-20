@@ -32,7 +32,7 @@ case "$1" in
         case "$alink" in
             simple-alink)
                 echo "Stopping simple-alink..."
-                killall -q socket_srv
+                killall -q simple_alink.sh
                 ;;
             greg-alink)
                 echo "Stopping greg-alink..."
