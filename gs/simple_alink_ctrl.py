@@ -22,13 +22,11 @@ TX_RSSI_MAX = -40     # highest RSSI (best signal)
 TX_PWR_HIGH = 9       # highest TX power (when RSSI is very low)
 TX_PWR_LOW = 1        # lowest TX power (when RSSI is high)
 
-# Thresholds for REC_LOST command:
-REC_THRESHOLD_FEC = 10  # If fec_rec (first tuple) is above 10, trigger REC_LOST
-REC_THRESHOLD_LOST = 5  # If lost (first tuple) is above 5, trigger REC_LOST
-
-# Moving average window size for RSSI:
-RSSI_MOVING_AVG_WINDOW = 5
-rssi_history = []
+# REC_LOST thresholds and sample size
+REC_THRESHOLD_FEC = 0  # Default threshold for fec_rec (if > this, trigger)
+REC_THRESHOLD_LOST = 0  # Default threshold for lost (if > this, trigger)
+REC_LOST_SAMPLE_SIZE = 5  # Number of samples to keep for REC_LOST calculation
+rec_lost_samples = []      # Global list for REC_LOST samples
 
 # Global sequence number for all commands sent.
 seq_num = 0
@@ -36,7 +34,7 @@ seq_lock = threading.Lock()  # For thread-safe sequence increments
 
 # Global variables set via command-line arguments.
 VERBOSITY = 0             # 0: silent, 1: commands and acks, 2: full debug info
-HEARTBEAT_INTERVAL = 0.25  # seconds (default 250ms)
+HEARTBEAT_INTERVAL = 0.5  # seconds (default now 0.5 sec)
 UDP_MODE = False          # If True, run in UDP mode
 
 # UDP transmission parameters (only used if UDP_MODE is True)
@@ -231,7 +229,7 @@ def socket_listener():
     Connect to the JSON stream on port 8103 and process incoming JSON messages.
     If the connection is lost, reconnect every 3 seconds.
     """
-    global rssi_history
+    global rssi_history, rec_lost_samples
     while not shutdown_event.is_set():
         try:
             log(2, f"[SOCKET] Connecting to JSON stream at {HOST}:{PORT}...")
@@ -265,30 +263,29 @@ def socket_listener():
                 if data.get("type") == "rx":
                     msg_id = data.get("id", "")
                     if msg_id == "video rx":
-                        # --- Process "packets" for REC_LOST command ---
+                        # --- Process "packets" for REC_LOST ---
                         packets = data.get("packets", {})
-                        rec_triggered = False
                         if packets:
-                            # Check for REC_LOST condition using first tuple from fec_rec and lost.
                             fec_rec = packets.get("fec_rec")
                             lost = packets.get("lost")
-                            if isinstance(fec_rec, list) and len(fec_rec) > 0 and isinstance(lost, list) and len(lost) > 0:
-                                fec_val = fec_rec[0]
-                                lost_val = lost[0]
-                                if fec_val > REC_THRESHOLD_FEC or lost_val > REC_THRESHOLD_LOST:
-                                    send_rec_lost(fec_val, lost_val)
-                                    rec_triggered = True
-
-                            # Also log packets info at detailed level.
-                            first_key = next(iter(packets))
-                            tuple_vals = packets[first_key]
-                            if isinstance(tuple_vals, list) and len(tuple_vals) >= 2:
-                                pkt_val1, pkt_val2 = tuple_vals[0], tuple_vals[1]
-                                log(2, f"[SOCKET] Packets [{first_key}]: {pkt_val1}, {pkt_val2}")
-                            else:
-                                log(2, "[SOCKET] Packets entry is not a list of at least 2 values.")
+                            if (isinstance(fec_rec, list) and len(fec_rec) > 0 and
+                                isinstance(lost, list) and len(lost) > 0):
+                                new_fec = fec_rec[0]
+                                new_lost = lost[0]
+                                # Append new sample; maintain sliding window.
+                                rec_lost_samples.append((new_fec, new_lost))
+                                if len(rec_lost_samples) > REC_LOST_SAMPLE_SIZE:
+                                    rec_lost_samples.pop(0)
+                                # Select sample with highest combined value.
+                                max_sample = max(rec_lost_samples, key=lambda s: s[0] + s[1])
+                                # Check thresholds: if both are 0, always send; otherwise, only send if either exceeds threshold.
+                                if REC_THRESHOLD_FEC == 0 and REC_THRESHOLD_LOST == 0:
+                                    send_rec_lost(max_sample[0], max_sample[1])
+                                else:
+                                    if max_sample[0] > REC_THRESHOLD_FEC or max_sample[1] > REC_THRESHOLD_LOST:
+                                        send_rec_lost(max_sample[0], max_sample[1])
                         else:
-                            log(2, "[SOCKET] No 'packets' data available.")
+                            log(2, "[SOCKET] No 'packets' data available for REC_LOST.")
 
                         # --- Process "rx_ant_stats" to get best RSSI ---
                         ant_stats = data.get("rx_ant_stats", [])
@@ -300,17 +297,18 @@ def socket_listener():
                         best_rssi = best_ant.get("rssi_avg", -1000)
                         log(2, f"[SOCKET] Best antenna stats: {best_ant}")
 
-                        # --- Update moving average ---
+                        # --- Update moving average for RSSI ---
+                        # (Append new best_rssi; remove oldest if window exceeded)
                         rssi_history.append(best_rssi)
-                        if len(rssi_history) > RSSI_MOVING_AVG_WINDOW:
+                        if len(rssi_history) > 5:
                             rssi_history.pop(0)
                         avg_rssi = round(sum(rssi_history) / len(rssi_history))
-                        log(2, f"[SOCKET] Updated RSSI moving average: {avg_rssi} (from history: {rssi_history})")
+                        log(2, f"[SOCKET] Updated RSSI moving average: {avg_rssi} (history: {rssi_history})")
 
                         # --- Compute commands using moving average ---
                         target_bitrate = map_rssi_to_bitrate(avg_rssi)
                         target_tx_power = map_rssi_to_tx_power(avg_rssi)
-                        log(2, f"[SOCKET] Using avg RSSI: {avg_rssi} dBm, computed bitrate: {target_bitrate}, computed TX_PWR: {target_tx_power}")
+                        log(2, f"[SOCKET] Using avg RSSI: {avg_rssi} dBm, computed BITRATE: {target_bitrate}, computed TX_PWR: {target_tx_power}")
 
                         # --- Send BITRATE and TX_PWR commands ---
                         send_bitrate(target_bitrate)
@@ -327,7 +325,7 @@ def socket_listener():
             except Exception:
                 pass
             time.sleep(3)
-            
+
 def heartbeat_sender(interval):
     """
     Periodically send HEARTBEAT messages every 'interval' seconds.
@@ -339,11 +337,16 @@ def heartbeat_sender(interval):
 
 def main():
     global VERBOSITY, HEARTBEAT_INTERVAL, UDP_MODE, udp_socket, udp_ip, udp_port
+    global rec_lost_samples, rssi_history
+
+    # Initialize the moving average lists.
+    rssi_history = []
+    rec_lost_samples = []
 
     parser = argparse.ArgumentParser(
         description="JSON Stream Client with periodic HEARTBEAT messages and REC_LOST detection")
-    parser.add_argument("--heartbeat", type=float, default=0.25,
-                        help="Heartbeat interval in seconds (default: 0.25)")
+    parser.add_argument("--heartbeat", type=float, default=0.5,
+                        help="Heartbeat interval in seconds (default: 0.5)")
     parser.add_argument("--verbose", type=int, default=0,
                         help="Set verbosity level (0: silent, 1: commands and acks, 2: full debug)")
     parser.add_argument("--udp", action="store_true",
