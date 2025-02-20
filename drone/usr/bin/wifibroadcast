@@ -50,7 +50,7 @@ wfb_yaml() {
             fi
         done
 
-        telemetry_keys="router serial osd_fps"
+        telemetry_keys="router serial osd_fps channels"
         for key in $telemetry_keys; do
             val="$(yaml-cli -i "$CONFIG_FILE" -g ".telemetry.$key" 2>/dev/null)"
             if [ -n "$val" ]; then
@@ -140,7 +140,7 @@ start_telemetry() {
             --master "$TELEMETRY_SERIAL" --out 10.5.0.1:14551 --size "${size:-1280x720}" > /dev/null &
     elif [ "$TELEMETRY_ROUTER" = "mavfwd" ]; then
         echo "- Starting $TELEMETRY_ROUTER"
-        mavfwd --baudrate 115200 --channels 8 -p 100 -a 15 -t \
+        mavfwd --baudrate 115200 --channels $TELEMETRY_CHANNELS -p 100 -a 15 -t \
             --master "$TELEMETRY_SERIAL" --in 0.0.0.0:14550 --out 10.5.0.1:14551 > /dev/null &
     fi
 }

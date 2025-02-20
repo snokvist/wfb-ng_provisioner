@@ -1,44 +1,6 @@
 #!/bin/sh
 # simple_alink.sh
 # Usage: simple_alink.sh [--verbose]
-#
-# This script processes tab-delimited commands from STDIN.
-# It focuses on HEARTBEAT, BITRATE, TX_PWR, and REC_LOST messages and includes state logic.
-#
-# HEARTBEAT:
-#   - Updates the last heartbeat timestamp.
-#   - Resets the fallback flag.
-#
-# BITRATE:
-#   - Updates the last heartbeat timestamp.
-#   - Checks if the new bitrate (data2) differs from the last issued bitrate by at least BITRATE_DIFF_THRESHOLD.
-#   - If the change is significant, it determines whether the bitrate has increased or decreased,
-#     updates state, and calls a system command to update the bitrate.
-#   - If the new bitrate is below MIN_ACCEPTABLE_BITRATE or above MAX_ACCEPTABLE_BITRATE,
-#     the value is clamped and that extreme is triggered only once.
-#
-# TX_PWR:
-#   - Updates the last heartbeat timestamp.
-#   - Checks if the new tx power (data2) differs from the last issued tx power by at least TX_PWR_DIFF_THRESHOLD.
-#   - If the change is significant, it determines whether the tx power has increased or decreased,
-#     updates state, and calls a system command to update the tx power.
-#   - Extreme values (below MIN or above MAX) are clamped and only trigger an update once.
-#
-# REC_LOST:
-#   - Simply echoes back the received REC_LOST message and its content.
-#
-# Fallback:
-#   - If more than FALLBACK_TIMEOUT seconds elapse without any valid command,
-#     fallback commands are issued for both BITRATE and TX_PWR.
-#
-# COMMAND ENABLE:
-#   - Activates the system (same as receiving the first valid command).
-#
-# COMMAND DISABLE:
-#   - Deactivates the system (resetting all states to initial) and issues:
-#         set_alink_bitrate.sh 8000 5 --max_bw 20
-#         set_alink_tx_pwr.sh 5
-#
 # --verbose option: if provided as the first argument, enables debug output to stderr.
 
 VERBOSE=0
@@ -46,7 +8,7 @@ if [ "$1" = "--verbose" ]; then
     VERBOSE=1
 fi
 
-# Debug printing function (prints to stderr in verbose mode)
+# Debug printing function.
 debug() {
     if [ "$VERBOSE" -eq 1 ]; then
         echo "DEBUG: $*" >&2
@@ -56,150 +18,131 @@ debug() {
 debug "Verbose mode enabled. Starting command listener with state logic."
 
 # --- Configuration Parameters ---
-FALLBACK_TIMEOUT=1              # Seconds to wait for heartbeat before fallback.
 BITRATE_DIFF_THRESHOLD=2000     # Minimum difference to accept a new bitrate.
 TX_PWR_DIFF_THRESHOLD=2         # Minimum difference to accept a new tx power change.
-FALLBACK_BITRATE=3000           # Fallback bitrate value.
-FALLBACK_TX=8                   # Fallback tx power value.
 MAX_ACCEPTABLE_BITRATE=12000    # Maximum allowed bitrate.
 MIN_ACCEPTABLE_BITRATE=4500     # Minimum allowed bitrate.
 MAX_ACCEPTABLE_TX_PWR=9         # Maximum allowed tx power.
 MIN_ACCEPTABLE_TX_PWR=2         # Minimum allowed tx power.
 
-# Replace the commands below with your actual system commands.
-FALLBACK_COMMAND="set_alink_bitrate.sh"       # Command to call on bitrate fallback.
-UPDATE_BITRATE_COMMAND="set_alink_bitrate.sh" # Command to update bitrate.
-UPDATE_TX_PWR_COMMAND="set_alink_tx_pwr.sh"     # Command to update tx power.
+# Fallback configuration.
+FALLBACK_BITRATE=2800           # Static bitrate to use in fallback.
+FALLBACK_TX=10                  # Static tx power to use in fallback.
+# Thresholds for triggering fallback based on REC_LOST:
+BAD_REC_THRESHOLD=30            # Fallback triggered if REC > BAD_REC_THRESHOLD.
+BAD_LOST_THRESHOLD=5            # Fallback triggered if LOST > BAD_LOST_THRESHOLD.
+# Recovery threshold parameters:
+CURRENT_REC_LOST_RECOVER_REQUIRED=5   # Number of consecutive good REC_LOST messages required to exit fallback.
+# Timeout to trigger fallback if no messages are received.
+NO_MSG_TIMEOUT=1
 
+# Replace commands with your actual system commands.
+UPDATE_BITRATE_COMMAND="set_alink_bitrate.sh"
+UPDATE_TX_PWR_COMMAND="set_alink_tx_pwr.sh"
+
+# Read configuration for wireless parameters.
 MAX_BW=$(yaml-cli -i /etc/wfb.yaml -g .wireless.max_bw)
-# Set MAX_MCS based on MAX_BW: if MAX_BW is 40, use 3; otherwise 5.
 if [ "$MAX_BW" -eq 40 ]; then
     MAX_MCS=3
 else
     MAX_MCS=5
 fi
 
-# --- State Variables ---
+# Fetch the original GOP size at startup.
+ORIGINAL_GOP=$(yaml-cli -i /etc/majestic.yaml -g .video0.gopSize)
+if [ -z "$ORIGINAL_GOP" ]; then
+    ORIGINAL_GOP=1
+fi
+
+# --- Global Counters and State Variables ---
+TOTAL_MSG_COUNT=0
+MSG_COUNT_SINCE_FALLBACK=0
+
 ENABLED=0
+SYSTEM_ACTIVE=0  # Becomes 1 once a valid command is received.
 
-# System active flag: becomes 1 once a valid command (HEARTBEAT, BITRATE, TX_PWR, or COMMAND ENABLE) is received.
-SYSTEM_ACTIVE=0
+# BITRATE state.
+CURRENT_BITRATE=0
+PREV_BITRATE=""
+BITRATE_DIRECTION="none"
+BITRATE_AT_MIN=0
+BITRATE_AT_MAX=0
 
-# BITRATE variables
-CURRENT_BITRATE=0        # Last received bitrate (from BITRATE command)
-PREV_BITRATE=""          # Last accepted/issued bitrate
-BITRATE_DIRECTION="none" # "initial", "increased", "decreased", or "unchanged"
-BITRATE_AT_MIN=0         # Flag: 1 if bitrate has been clamped to min
-BITRATE_AT_MAX=0         # Flag: 1 if bitrate has been clamped to max
-
-# TX_PWR variables
-CURRENT_TX_PWR=0         # Last received tx power (from TX_PWR command)
-PREV_TX_PWR=""           # Last accepted/issued tx power
-TX_PWR_DIRECTION="none"  # "initial", "increased", "decreased", or "unchanged"
-TX_PWR_AT_MIN=0          # Flag: 1 if tx power has been clamped to min
-TX_PWR_AT_MAX=0          # Flag: 1 if tx power has been clamped to max
+# TX_PWR state.
+CURRENT_TX_PWR=0
+PREV_TX_PWR=""
+TX_PWR_DIRECTION="none"
+TX_PWR_AT_MIN=0
+TX_PWR_AT_MAX=0
 
 INFO_STATE=""
 STATUS_STATE=""
-LAST_HEARTBEAT=$(date +%s)  # Initialize with current epoch seconds.
-FALLBACK_ISSUED=0           # To avoid repeatedly issuing fallback.
+
+# Fallback state.
+FALLBACK_ACTIVE=0
+REC_LOST_RECOVER_COUNT=0
+
+# For detecting message timeout.
+LAST_MSG_TIME=$(date +%s)
 
 # --- Main Loop ---
-# We use a read timeout (-t 1) so that even if no input is received we can check for heartbeat timeout.
-# Reading up to four tab-separated fields allows us to capture REC_LOST messages.
 while true; do
-    # Only run fallback logic if the system is active.
-    if [ "$SYSTEM_ACTIVE" -eq 1 ]; then
-        now=$(date +%s)
-        elapsed=$(( now - LAST_HEARTBEAT ))
-        if [ "$elapsed" -gt "$FALLBACK_TIMEOUT" ] && [ "$FALLBACK_ISSUED" -eq 0 ]; then
-            debug "No valid command received for ${elapsed}s. Issuing fallback commands."
-
-            # BITRATE fallback logic using MAX_MCS.
-            BITRATE_DIRECTION="decreased"
-            CURRENT_BITRATE="$FALLBACK_BITRATE"
-            PREV_BITRATE="$FALLBACK_BITRATE"
-            $FALLBACK_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
-            debug "Fallback BITRATE command issued: setting bitrate to $FALLBACK_BITRATE, direction: $BITRATE_DIRECTION"
-
-            # TX_PWR fallback logic.
-            TX_PWR_DIRECTION="decreased"
-            CURRENT_TX_PWR="$FALLBACK_TX"
-            PREV_TX_PWR="$FALLBACK_TX"
-            $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "$TX_PWR_DIRECTION"
-            debug "Fallback TX_PWR command issued: setting tx power to $FALLBACK_TX, direction: $TX_PWR_DIRECTION"
-
-            # Reset extreme flags after fallback so new values are processed normally.
-            BITRATE_AT_MIN=0
-            BITRATE_AT_MAX=0
-            TX_PWR_AT_MIN=0
-            TX_PWR_AT_MAX=0
-
-            FALLBACK_ISSUED=1
-        fi
-    fi
-
-    # Attempt to read a command (fields separated by tabs). Timeout after 1 second.
+    current_time=$(date +%s)
     if IFS=$'\t' read -t 1 -r command data1 data2 data3; then
+        # Update timestamp and counters.
+        LAST_MSG_TIME=$(date +%s)
+        TOTAL_MSG_COUNT=$(( TOTAL_MSG_COUNT + 1 ))
+        if [ "$FALLBACK_ACTIVE" -eq 1 ]; then
+            MSG_COUNT_SINCE_FALLBACK=$(( MSG_COUNT_SINCE_FALLBACK + 1 ))
+        fi
+
         debug "Received command: '$command', data1: '$data1', data2: '$data2', data3: '$data3'"
         case "$command" in
             HEARTBEAT)
-                # Activate system if this is the first valid command.
                 if [ "$SYSTEM_ACTIVE" -eq 0 ]; then
                     SYSTEM_ACTIVE=1
                     debug "First valid command received: system activated."
                 fi
-                LAST_HEARTBEAT=$(date +%s)
-                FALLBACK_ISSUED=0
-                debug "HEARTBEAT processed. LAST_HEARTBEAT updated to $LAST_HEARTBEAT."
-                echo "ACK:HEARTBEAT\t$data1\tHeartbeat received"
+                debug "HEARTBEAT processed."
+                echo "ACK:HEARTBEAT	$data1	Heartbeat received"
                 ;;
             BITRATE)
+                # In fallback, ignore BITRATE commands.
+                if [ "$FALLBACK_ACTIVE" -eq 1 ]; then
+                    debug "In fallback mode: BITRATE command ignored."
+                    echo "ACK:BITRATE	$data1	Bitrate command ignored (fallback active)"
+                    continue
+                fi
                 if [ "$SYSTEM_ACTIVE" -eq 0 ]; then
                     SYSTEM_ACTIVE=1
                     debug "First valid command received: system activated."
                 fi
-                LAST_HEARTBEAT=$(date +%s)
-                FALLBACK_ISSUED=0
                 new_bitrate="$data2"
-
-                # Enforce extreme limits for BITRATE.
                 if [ "$new_bitrate" -ge "$MAX_ACCEPTABLE_BITRATE" ]; then
-                    debug "New bitrate $new_bitrate is equal to or exceeds maximum limit $MAX_ACCEPTABLE_BITRATE, using max instead."
+                    debug "New bitrate $new_bitrate exceeds max limit $MAX_ACCEPTABLE_BITRATE, using max."
                     new_bitrate="$MAX_ACCEPTABLE_BITRATE"
                     if [ "$BITRATE_AT_MAX" -eq 0 ]; then
-                        BITRATE_AT_MAX=1
-                        BITRATE_AT_MIN=0
-                        accept=1
-                        BITRATE_DIRECTION="increased"
+                        BITRATE_AT_MAX=1; BITRATE_AT_MIN=0; accept=1; BITRATE_DIRECTION="increased"
                     else
                         accept=0
                         debug "Already at max bitrate; ignoring update."
                     fi
                 elif [ "$new_bitrate" -le "$MIN_ACCEPTABLE_BITRATE" ]; then
-                    debug "New bitrate $new_bitrate is equal to or below minimum limit $MIN_ACCEPTABLE_BITRATE, using min instead."
+                    debug "New bitrate $new_bitrate below min limit $MIN_ACCEPTABLE_BITRATE, using min."
                     new_bitrate="$MIN_ACCEPTABLE_BITRATE"
                     if [ "$BITRATE_AT_MIN" -eq 0 ]; then
-                        BITRATE_AT_MIN=1
-                        BITRATE_AT_MAX=0
-                        accept=1
-                        BITRATE_DIRECTION="decreased"
+                        BITRATE_AT_MIN=1; BITRATE_AT_MAX=0; accept=1; BITRATE_DIRECTION="decreased"
                     else
                         accept=0
                         debug "Already at min bitrate; ignoring update."
                     fi
                 else
-                    # New bitrate is within allowed range; clear extreme flags.
-                    BITRATE_AT_MIN=0
-                    BITRATE_AT_MAX=0
+                    BITRATE_AT_MIN=0; BITRATE_AT_MAX=0
                     if [ -z "$PREV_BITRATE" ]; then
-                        accept=1
-                        BITRATE_DIRECTION="initial"
+                        accept=1; BITRATE_DIRECTION="initial"
                     else
                         diff=$(( new_bitrate - PREV_BITRATE ))
-                        if [ $diff -lt 0 ]; then
-                            diff=$(( -diff ))
-                        fi
+                        [ $diff -lt 0 ] && diff=$(( -diff ))
                         if [ "$diff" -ge "$BITRATE_DIFF_THRESHOLD" ]; then
                             accept=1
                             if [ "$new_bitrate" -gt "$PREV_BITRATE" ]; then
@@ -219,59 +162,50 @@ while true; do
                     PREV_BITRATE="$new_bitrate"
                     debug "BITRATE accepted. New bitrate: $new_bitrate, Direction: $BITRATE_DIRECTION."
                     $UPDATE_BITRATE_COMMAND "$new_bitrate" $MAX_MCS --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
-                    echo "ACK:BITRATE\t$data1\tBitrate updated to $new_bitrate ($BITRATE_DIRECTION)"
+                    echo "ACK:BITRATE	$data1	Bitrate updated to $new_bitrate ($BITRATE_DIRECTION)"
                     debug "System command issued to update bitrate to $new_bitrate."
                 else
                     debug "BITRATE change not significant or already at extreme; command ignored."
-                    echo "ACK:BITRATE\t$data1\tBitrate change ignored; not significant"
+                    echo "ACK:BITRATE	$data1	Bitrate change ignored; not significant"
                 fi
                 ;;
             TX_PWR)
+                # In fallback, ignore TX_PWR commands.
+                if [ "$FALLBACK_ACTIVE" -eq 1 ]; then
+                    debug "In fallback mode: TX_PWR command ignored."
+                    echo "ACK:TX_PWR	$data1	Tx power command ignored (fallback active)"
+                    continue
+                fi
                 if [ "$SYSTEM_ACTIVE" -eq 0 ]; then
                     SYSTEM_ACTIVE=1
                     debug "First valid command received: system activated."
                 fi
-                LAST_HEARTBEAT=$(date +%s)
-                FALLBACK_ISSUED=0
                 new_tx="$data2"
-
-                # Enforce extreme limits for TX_PWR.
                 if [ "$new_tx" -ge "$MAX_ACCEPTABLE_TX_PWR" ]; then
-                    debug "New TX_PWR $new_tx is equal to or exceeds maximum limit $MAX_ACCEPTABLE_TX_PWR, using max instead."
+                    debug "New TX_PWR $new_tx exceeds max limit $MAX_ACCEPTABLE_TX_PWR, using max."
                     new_tx="$MAX_ACCEPTABLE_TX_PWR"
                     if [ "$TX_PWR_AT_MAX" -eq 0 ]; then
-                        TX_PWR_AT_MAX=1
-                        TX_PWR_AT_MIN=0
-                        accept_tx=1
-                        TX_PWR_DIRECTION="increased"
+                        TX_PWR_AT_MAX=1; TX_PWR_AT_MIN=0; accept_tx=1; TX_PWR_DIRECTION="increased"
                     else
                         accept_tx=0
                         debug "Already at max TX_PWR; ignoring update."
                     fi
                 elif [ "$new_tx" -le "$MIN_ACCEPTABLE_TX_PWR" ]; then
-                    debug "New TX_PWR $new_tx is equal to or below minimum limit $MIN_ACCEPTABLE_TX_PWR, using min instead."
+                    debug "New TX_PWR $new_tx below min limit $MIN_ACCEPTABLE_TX_PWR, using min."
                     new_tx="$MIN_ACCEPTABLE_TX_PWR"
                     if [ "$TX_PWR_AT_MIN" -eq 0 ]; then
-                        TX_PWR_AT_MIN=1
-                        TX_PWR_AT_MAX=0
-                        accept_tx=1
-                        TX_PWR_DIRECTION="decreased"
+                        TX_PWR_AT_MIN=1; TX_PWR_AT_MAX=0; accept_tx=1; TX_PWR_DIRECTION="decreased"
                     else
                         accept_tx=0
                         debug "Already at min TX_PWR; ignoring update."
                     fi
                 else
-                    # New tx power is within allowed range; clear extreme flags.
-                    TX_PWR_AT_MIN=0
-                    TX_PWR_AT_MAX=0
+                    TX_PWR_AT_MIN=0; TX_PWR_AT_MAX=0
                     if [ -z "$PREV_TX_PWR" ]; then
-                        accept_tx=1
-                        TX_PWR_DIRECTION="initial"
+                        accept_tx=1; TX_PWR_DIRECTION="initial"
                     else
                         diff_tx=$(( new_tx - PREV_TX_PWR ))
-                        if [ $diff_tx -lt 0 ]; then
-                            diff_tx=$(( -diff_tx ))
-                        fi
+                        [ $diff_tx -lt 0 ] && diff_tx=$(( -diff_tx ))
                         if [ "$diff_tx" -ge "$TX_PWR_DIFF_THRESHOLD" ]; then
                             accept_tx=1
                             if [ "$new_tx" -gt "$PREV_TX_PWR" ]; then
@@ -291,89 +225,132 @@ while true; do
                     PREV_TX_PWR="$new_tx"
                     debug "TX_PWR accepted. New tx power: $new_tx, Direction: $TX_PWR_DIRECTION."
                     $UPDATE_TX_PWR_COMMAND "$new_tx" --direction "$TX_PWR_DIRECTION"
-                    echo "ACK:TX_PWR\t$data1\tTx power updated to $new_tx ($TX_PWR_DIRECTION)"
+                    echo "ACK:TX_PWR	$data1	Tx power updated to $new_tx ($TX_PWR_DIRECTION)"
                     debug "System command issued to update tx power to $new_tx."
                 else
                     debug "TX_PWR change not significant or already at extreme; command ignored."
-                    echo "ACK:TX_PWR\t$data1\tTx power change ignored; not significant"
+                    echo "ACK:TX_PWR	$data1	Tx power change ignored; not significant"
                 fi
                 ;;
             REC_LOST)
-                debug "REC_LOST message received: seq=$data1, rec data=$data2, lost data=$data3"
-                echo "ACK:REC_LOST\t$data1\t$data2\t$data3"
+                # Process REC_LOST messages for fallback/recovery.
+                # data2 = REC, data3 = LOST.
+                rec_val="$data2"
+                lost_val="$data3"
+
+                if [ "$FALLBACK_ACTIVE" -eq 0 ]; then
+                    # Not in fallback: trigger fallback if REC or LOST are too high.
+                    if [ "$rec_val" -gt "$BAD_REC_THRESHOLD" ] || [ "$lost_val" -gt "$BAD_LOST_THRESHOLD" ]; then
+                        debug "REC_LOST indicates bad link (REC=$rec_val, LOST=$lost_val). Entering fallback mode."
+                        FALLBACK_ACTIVE=1
+                        MSG_COUNT_SINCE_FALLBACK=0
+                        REC_LOST_RECOVER_COUNT=0
+                        $UPDATE_BITRATE_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "decreased"
+                        $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "increased"
+                        # Update state variables so that fallback values become the baseline.
+                        PREV_BITRATE="$FALLBACK_BITRATE"
+                        PREV_TX_PWR="$FALLBACK_TX"
+                        curl localhost/api/v1/set?video0.gopSize=0.25
+                        echo "ACK:REC_LOST	$data1	Fallback activated due to bad link (REC=$rec_val, LOST=$lost_val)"
+                        continue
+                    fi
+                else
+                    # Already in fallback.
+                    # Use REC_LOST messages with REC < 20 and LOST < 5 as good recovery signals.
+                    if [ "$rec_val" -lt 20 ] && [ "$lost_val" -lt 5 ]; then
+                        REC_LOST_RECOVER_COUNT=$(( REC_LOST_RECOVER_COUNT + 1 ))
+                        debug "In fallback: Good REC_LOST received (REC=$rec_val, LOST=$lost_val). Recovery count = $REC_LOST_RECOVER_COUNT (required: $CURRENT_REC_LOST_RECOVER_REQUIRED)."
+                        if [ "$REC_LOST_RECOVER_COUNT" -ge "$CURRENT_REC_LOST_RECOVER_REQUIRED" ]; then
+                            debug "Recovery criteria met: Exiting fallback mode."
+                            FALLBACK_ACTIVE=0
+                            REC_LOST_RECOVER_COUNT=0
+                            # Reset recovery threshold to 5 on successful recovery.
+                            CURRENT_REC_LOST_RECOVER_REQUIRED=5
+                            MSG_COUNT_SINCE_FALLBACK=0
+                            # Reset BITRATE/TX_PWR state flags so new changes will be accepted.
+                            BITRATE_AT_MAX=0; BITRATE_AT_MIN=0
+                            TX_PWR_AT_MAX=0; TX_PWR_AT_MIN=0
+                            curl localhost/api/v1/set?video0.gopSize=$ORIGINAL_GOP
+                            echo "ACK:REC_LOST	$data1	Recovery successful, fallback exited."
+                            continue
+                        fi
+                    else
+                        REC_LOST_RECOVER_COUNT=0
+                        debug "In fallback: REC_LOST values not acceptable (REC=$rec_val, LOST=$lost_val); recovery counter reset."
+                    fi
+                    echo "ACK:REC_LOST	$data1	REC=$rec_val, LOST=$lost_val (fallback active)"
+                    continue
+                fi
+                debug "REC_LOST message received: REC=$rec_val, LOST=$lost_val"
+                echo "ACK:REC_LOST	$data1	REC=$rec_val, LOST=$lost_val"
                 ;;
             INFO)
                 INFO_STATE="$data2"
                 debug "INFO command processed. INFO_STATE set to '$INFO_STATE'."
-                echo "ACK:INFO\t$data1\tInfo updated to: $INFO_STATE"
+                echo "ACK:INFO	$data1	Info updated to: $INFO_STATE"
                 ;;
             STATUS)
                 STATUS_STATE="$data2"
                 debug "STATUS command processed. STATUS_STATE set to '$STATUS_STATE'."
-                echo "ACK:STATUS\t$data1\tStatus updated to: $STATUS_STATE"
+                echo "ACK:STATUS	$data1	Status updated to: $STATUS_STATE"
                 ;;
             COMMAND)
                 case "$data2" in
                     ENABLE)
-                        # Activate system if not already active.
                         SYSTEM_ACTIVE=1
-                        LAST_HEARTBEAT=$(date +%s)
-                        FALLBACK_ISSUED=0
                         debug "COMMAND ENABLE processed. System activated."
-                        echo "ACK:COMMAND\t$data1\tEnabled"
+                        echo "ACK:COMMAND	$data1	Enabled"
                         ;;
                     DISABLE)
-                        # Disable system: reset all state variables and issue safe commands.
                         SYSTEM_ACTIVE=0
-                        CURRENT_BITRATE=0
-                        PREV_BITRATE=""
-                        BITRATE_DIRECTION="none"
-                        BITRATE_AT_MIN=0
-                        BITRATE_AT_MAX=0
-                        CURRENT_TX_PWR=0
-                        PREV_TX_PWR=""
-                        TX_PWR_DIRECTION="none"
-                        TX_PWR_AT_MIN=0
-                        TX_PWR_AT_MAX=0
-                        INFO_STATE=""
-                        STATUS_STATE=""
-                        LAST_HEARTBEAT=$(date +%s)
-                        FALLBACK_ISSUED=0
+                        CURRENT_BITRATE=0; PREV_BITRATE=""; BITRATE_DIRECTION="none"
+                        BITRATE_AT_MIN=0; BITRATE_AT_MAX=0
+                        CURRENT_TX_PWR=0; PREV_TX_PWR=""; TX_PWR_DIRECTION="none"
+                        TX_PWR_AT_MIN=0; TX_PWR_AT_MAX=0
+                        INFO_STATE=""; STATUS_STATE=""
                         debug "COMMAND DISABLE processed. System deactivated and states reset."
-                        # Issue safe default commands:
                         set_alink_bitrate.sh 8000 5 --max_bw 20
                         set_alink_tx_pwr.sh 5
-                        echo "ACK:COMMAND\t$data1\tDisabled"
+                        echo "ACK:COMMAND	$data1	Disabled"
                         ;;
                     RESET)
-                        # Reset state variables but leave system active.
-                        CURRENT_BITRATE=0
-                        PREV_BITRATE=""
-                        BITRATE_DIRECTION="none"
-                        BITRATE_AT_MIN=0
-                        BITRATE_AT_MAX=0
-                        CURRENT_TX_PWR=0
-                        PREV_TX_PWR=""
-                        TX_PWR_DIRECTION="none"
-                        TX_PWR_AT_MIN=0
-                        TX_PWR_AT_MAX=0
-                        INFO_STATE=""
-                        STATUS_STATE=""
-                        LAST_HEARTBEAT=$(date +%s)
-                        FALLBACK_ISSUED=0
+                        CURRENT_BITRATE=0; PREV_BITRATE=""; BITRATE_DIRECTION="none"
+                        BITRATE_AT_MIN=0; BITRATE_AT_MAX=0
+                        CURRENT_TX_PWR=0; PREV_TX_PWR=""; TX_PWR_DIRECTION="none"
+                        TX_PWR_AT_MIN=0; TX_PWR_AT_MAX=0
+                        INFO_STATE=""; STATUS_STATE=""
                         debug "COMMAND RESET processed. All states reset."
-                        echo "ACK:COMMAND\t$data1\tStates reset"
+                        echo "ACK:COMMAND	$data1	States reset"
                         ;;
                     *)
                         debug "Unknown COMMAND action: '$data2'."
-                        echo "ACK:COMMAND\t$data1\tUnknown command action: $data2"
+                        echo "ACK:COMMAND	$data1	Unknown command action: $data2"
                         ;;
                 esac
                 ;;
             *)
                 debug "Unknown command received: '$command'."
-                echo "ERROR\t$data1\tUnknown command: $command"
+                echo "ERROR	$data1	Unknown command: $command"
                 ;;
         esac
+    else
+        # read timed out – no message received.
+        current_time=$(date +%s)
+        if [ $(( current_time - LAST_MSG_TIME )) -ge "$NO_MSG_TIMEOUT" ]; then
+            if [ "$FALLBACK_ACTIVE" -eq 0 ]; then
+                debug "No messages received for $NO_MSG_TIMEOUT seconds. Triggering fallback."
+                FALLBACK_ACTIVE=1
+                MSG_COUNT_SINCE_FALLBACK=0
+                REC_LOST_RECOVER_COUNT=0
+                $UPDATE_BITRATE_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "decreased"
+                $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "increased"
+                # Update state variables on timeout fallback as well.
+                PREV_BITRATE="$FALLBACK_BITRATE"
+                PREV_TX_PWR="$FALLBACK_TX"
+                curl localhost/api/v1/set?video0.gopSize=0.25
+                echo "ACK:TIMEOUT	-	Fallback activated due to timeout (no messages for $NO_MSG_TIMEOUT seconds)"
+                LAST_MSG_TIME=$(date +%s)
+            fi
+        fi
     fi
 done
