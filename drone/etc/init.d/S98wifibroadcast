@@ -11,8 +11,13 @@ case "$1" in
 		wifibroadcast stop
 		;;
 
+	bind)
+		echo "Binding..."
+		wifibroadcast bind
+		;;
+
 	*)
-		echo "Usage: $0 {start|stop}"
+		echo "Usage: $0 {start|stop|bind}"
 		exit 1
 		;;
 esac
