@@ -4,8 +4,8 @@
 IP="${1:-192.168.1.232}"
 
 echo "chmod +x on relevant files ..."
-chmod +x drone/usr/bin*
-chmod +x drone/etc/init.d/*
+chmod -R +x drone/usr/bin*
+chmod -R +x drone/etc/init.d/*
 
 echo "Starting scp ..."
 SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r /etc/gs.key root@$IP:/etc/drone.key 2>&1 | grep -v debug1
