@@ -11,7 +11,7 @@ wireless:
   vtx_name: OpenIPC
   wifi_module: default
   allow_startup_bind: true
-  alink: simple-alink
+  alink: disabled
   temperature_throttle: enable
   profile: vipers_profile
   broadcast_redundancy: auto
