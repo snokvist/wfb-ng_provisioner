@@ -108,7 +108,7 @@ fi
 RESULT=$(bitrate_calculator.sh "$TARGET" "$fec_ratio" "$max_mcs" --cap "$CAP" --gi long --max_bw "$MAX_BW")
 if [ $? -ne 0 ]; then
     echo "Error: bitrate_calculator.sh failed. Setting fallback, please retry with a lower bitrate."
-    set_bitrate.sh 3000 0 --max_bw 20
+    set_alink_bitrate.sh 2500 1 --max_bw $MAX_BW --direction decreased
     exit 1
 fi
 
@@ -136,7 +136,7 @@ if [ "$DIRECTION" = "decreased" ]; then
     # If "decreased", update Majestic Online first
     ## --- Update Majestic Online ---
     curl -s localhost/api/v1/set?video0.bitrate=$TARGET 2> /dev/null
-    sleep 1
+    #sleep 0.1
     # Then update WFB_NG Online
     # --- Update WFB_NG Online ---
     wfb_tx_cmd 8000 set_radio -B ${candidate_bw} -G ${candidate_gi} \
@@ -152,7 +152,7 @@ else
       -L $(yaml-cli -i /etc/wfb.yaml -g .broadcast.ldpc_tx) \
       -M ${candidate_mcs}
     wfb_tx_cmd 8000 set_fec -k ${fec_k} -n ${fec_n}
-    sleep 0.2
+    #sleep 0.2
     ## --- Update Majestic Online ---
     curl -s localhost/api/v1/set?video0.bitrate=$TARGET 2> /dev/null
 fi
