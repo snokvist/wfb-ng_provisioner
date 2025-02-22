@@ -1,6 +1,9 @@
 #!/bin/sh
 # simple_alink.sh
 # Usage: simple_alink.sh [--verbose]
+#
+# [Header omitted for brevity...]
+#
 # --verbose option: if provided as the first argument, enables debug output to stderr.
 
 VERBOSE=0
@@ -34,7 +37,7 @@ BAD_LOST_THRESHOLD=5            # Fallback triggered if LOST > BAD_LOST_THRESHOL
 # Recovery threshold parameters:
 CURRENT_REC_LOST_RECOVER_REQUIRED=5   # Number of consecutive good REC_LOST messages required to exit fallback.
 # Timeout to trigger fallback if no messages are received.
-NO_MSG_TIMEOUT=1
+NO_MSG_TIMEOUT=5
 
 # Replace commands with your actual system commands.
 UPDATE_BITRATE_COMMAND="set_alink_bitrate.sh"
@@ -161,9 +164,9 @@ while true; do
                 if [ "$accept" -eq 1 ]; then
                     PREV_BITRATE="$new_bitrate"
                     debug "BITRATE accepted. New bitrate: $new_bitrate, Direction: $BITRATE_DIRECTION."
-                    $UPDATE_BITRATE_COMMAND "$new_bitrate" $MAX_MCS --max_bw $MAX_BW --direction "$BITRATE_DIRECTION"
+                    $UPDATE_BITRATE_COMMAND "$new_bitrate" $MAX_MCS --max_bw $MAX_BW --direction "$BITRATE_DIRECTION" --tx_pwr $CURRENT_TX_PWR
                     echo "ACK:BITRATE	$data1	Bitrate updated to $new_bitrate ($BITRATE_DIRECTION)"
-                    debug "System command issued to update bitrate to $new_bitrate."
+                    debug "System command issued to update bitrate to $new_bitrate. "
                 else
                     debug "BITRATE change not significant or already at extreme; command ignored."
                     echo "ACK:BITRATE	$data1	Bitrate change ignored; not significant"
@@ -245,8 +248,8 @@ while true; do
                         FALLBACK_ACTIVE=1
                         MSG_COUNT_SINCE_FALLBACK=0
                         REC_LOST_RECOVER_COUNT=0
-                        $UPDATE_BITRATE_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "decreased"
-                        $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "increased"
+                        $UPDATE_BITRATE_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "decreased" --tx_pwr $FALLBACK_TX
+                        #$UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "increased"
                         # Update state variables so that fallback values become the baseline.
                         PREV_BITRATE="$FALLBACK_BITRATE"
                         PREV_TX_PWR="$FALLBACK_TX"
@@ -270,6 +273,9 @@ while true; do
                             # Reset BITRATE/TX_PWR state flags so new changes will be accepted.
                             BITRATE_AT_MAX=0; BITRATE_AT_MIN=0
                             TX_PWR_AT_MAX=0; TX_PWR_AT_MIN=0
+                            # Reset baseline values so that the next BITRATE/TX_PWR command is seen as an increase.
+                            PREV_BITRATE=0
+                            PREV_TX_PWR=0
                             curl localhost/api/v1/set?video0.gopSize=$ORIGINAL_GOP
                             echo "ACK:REC_LOST	$data1	Recovery successful, fallback exited."
                             continue
@@ -337,13 +343,14 @@ while true; do
         # read timed out – no message received.
         current_time=$(date +%s)
         if [ $(( current_time - LAST_MSG_TIME )) -ge "$NO_MSG_TIMEOUT" ]; then
-            if [ "$FALLBACK_ACTIVE" -eq 0 ]; then
+            # Only trigger fallback if the system is active.
+            if [ "$SYSTEM_ACTIVE" -eq 1 ] && [ "$FALLBACK_ACTIVE" -eq 0 ]; then
                 debug "No messages received for $NO_MSG_TIMEOUT seconds. Triggering fallback."
                 FALLBACK_ACTIVE=1
                 MSG_COUNT_SINCE_FALLBACK=0
                 REC_LOST_RECOVER_COUNT=0
-                $UPDATE_BITRATE_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "decreased"
-                $UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "increased"
+                $UPDATE_BITRATE_COMMAND "$FALLBACK_BITRATE" $MAX_MCS --max_bw $MAX_BW --direction "decreased" --tx_pwr $FALLBACK_TX
+                #$UPDATE_TX_PWR_COMMAND "$FALLBACK_TX" --direction "increased"
                 # Update state variables on timeout fallback as well.
                 PREV_BITRATE="$FALLBACK_BITRATE"
                 PREV_TX_PWR="$FALLBACK_TX"
