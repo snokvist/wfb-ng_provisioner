@@ -10,7 +10,7 @@
       box-sizing: border-box;
     }
     body {
-      font-family: Helvetica;
+      font-family: Helvetica, sans-serif;
       background-color: #1e1e1e;
       margin: 0;
       padding: 0;
@@ -21,6 +21,17 @@
       background-color: #252526;
       color: white;
       padding: 15px 0;
+    }
+    header img {
+      display: block;
+      margin: 0 auto;
+    }
+    /* Overall information below the logo */
+    .ww-info {
+      color: #666;
+      font-style: italic;
+      text-align: center;
+      margin-top: 10px;
     }
     h3 {
       font-size: 1.5rem;
@@ -68,8 +79,7 @@
       cursor: pointer;
       font-size: 1rem;
       vertical-align: middle;
-      /* Set all buttons inside control groups to the same fixed width */
-      width: 200px;
+      width: 200px; /* uniform button width */
     }
     .form-section button:hover {
       background-color: #0b5ed7;
@@ -78,7 +88,7 @@
     .red-button {
       background-color: red !important;
     }
-    /* Benchtest button style: an orange-yellow */
+    /* Benchtest and Reboot button style (orange-yellow) */
     .bench-button {
       background-color: #D98C00 !important;
     }
@@ -98,6 +108,10 @@
       color: #dcdcdc;
       max-height: 500px;
       overflow: auto;
+    }
+    /* VTX Log: half the height of VTX Info */
+    .log-pre {
+      max-height: 250px;
     }
     /* Configurator link styling */
     .configurator-link {
@@ -119,7 +133,7 @@
     .small-note {
       font-size: 0.85rem;
       color: #aaa;
-      margin: 5px 0 0 160px; /* indented to line up with input fields */
+      margin: 5px 0 0 160px; /* indent to align with input fields */
     }
     /* Control group styling for standalone settings */
     .control-group {
@@ -138,7 +152,8 @@
 <body>
 
 <header>
-  <img src="logo.svg" width="220px">
+  <img src="logo.svg" width="220px" alt="Logo">
+  <div id="wwInfo" class="ww-info">Loading overall info...</div>
 </header>
 
 <div class="container">
@@ -204,13 +219,14 @@
       <select id="bitrateSelect"></select>
       <button id="setBitrateButton">Set Bitrate</button>
     </div>
-    <!-- Bench Testing Control Group -->
+    <!-- Benchtest and Reboot Control Group -->
     <div class="control-group">
       <label class="placeholder"></label>
       <button id="benchTestButton" class="bench-button">Benchtest</button>
+      <button id="rebootButton" class="bench-button">Reboot</button>
     </div>
     <div class="small-note">
-      Note: Puts the VTX temporarily into low power mode until next reboot. Always use a fan when benchtesting!
+      Note: Benchtest puts the VTX into low power mode. Always use a fan when benchtesting!
     </div>
   </section>
 
@@ -219,6 +235,12 @@
     <h3>VTX Info</h3>
     <pre id="vtxDisplay">Loading...</pre>
     <button id="refreshVtxButton">Refresh</button>
+  </section>
+
+  <!-- VTX Log Section -->
+  <section class="form-section">
+    <h3>VTX Log</h3>
+    <pre id="vtxLog" class="log-pre">Loading log...</pre>
   </section>
 </div>
 
@@ -283,6 +305,23 @@
     }, 1000);
   }
 
+  // Load overall info from /tmp/www_info
+  function loadWwInfo() {
+    fetch('/tmp/www_info')
+      .then(response => response.text())
+      .then(text => {
+        if (text.trim().toLowerCase().includes("<html")) {
+          document.getElementById('wwInfo').textContent = "VTX information not currently available ...";
+        } else {
+          document.getElementById('wwInfo').textContent = text.trim() || "VTX information not currently available ...";
+        }
+      })
+      .catch(err => {
+        document.getElementById('wwInfo').textContent = "VTX information not currently available ...";
+      });
+  }
+  loadWwInfo();
+
   // Bind with groundstation
   document.getElementById('bind-wfb-button').addEventListener('click', function() {
     executeDelay(this, 'provision_bind.sh');
@@ -326,9 +365,14 @@
     executeDelay(this, 'set_bitrate.sh ' + bitrate);
   });
 
-  // Bench Testing
+  // Benchtest
   document.getElementById('benchTestButton').addEventListener('click', function() {
     executeDelay(this, 'set_benchtesting.sh');
+  });
+
+  // Reboot button
+  document.getElementById('rebootButton').addEventListener('click', function() {
+    executeDelay(this, 'reboot');
   });
 
   // Reset VTX with confirmation
@@ -362,8 +406,35 @@
         document.getElementById('vtxDisplay').textContent = 'Error loading VTX info: ' + err;
       });
   }
-  document.getElementById('refreshVtxButton').addEventListener('click', loadVtxYaml);
+
+  // Function to load latest 50 lines from /tmp/vtx.log
+  function loadVtxLog() {
+    fetch('/tmp/vtx.log')
+      .then(function(response) {
+        if (!response.ok) { throw new Error('Network response was not ok'); }
+        return response.text();
+      })
+      .then(function(text) {
+        if (text.trim().toLowerCase().includes("<html")) {
+          document.getElementById('vtxLog').textContent = "";
+        } else {
+          let lines = text.trim().split('\n');
+          let last50 = lines.slice(-50).join('\n');
+          document.getElementById('vtxLog').textContent = last50 || "No log available.";
+        }
+      })
+      .catch(function(err) {
+        document.getElementById('vtxLog').textContent = "No log available.";
+      });
+  }
+  
+  // Refresh VTX Info and VTX Log together
+  document.getElementById('refreshVtxButton').addEventListener('click', function() {
+    loadVtxYaml();
+    loadVtxLog();
+  });
   loadVtxYaml();
+  loadVtxLog();
 
   // Function to load wifi profiles from /etc/wifi_profiles.yaml and populate the dropdown
   function loadWifiProfiles() {
