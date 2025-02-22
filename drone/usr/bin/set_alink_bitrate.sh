@@ -3,14 +3,14 @@
 # set_bitrate.sh
 #
 # Usage:
-#    set_bitrate.sh <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>] [--max_bw <20|40>] [--direction <initial|increased|decreased|unchanged>]
+#    set_bitrate.sh <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>] [--max_bw <20|40>] [--direction <initial|increased|decreased|unchanged>] [--tx_pwr <tx_power_value>]
 #
 # (Additional usage info…)
 #
 
 # --- Parse arguments ---
 if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>] [--max_bw <20|40>] [--direction <initial|increased|decreased|unchanged>]"
+    echo "Usage: $0 <target_bitrate_in_kbps> [max_mcs] [--cap <cap_value>] [--max_bw <20|40>] [--direction <initial|increased|decreased|unchanged>] [--tx_pwr <tx_power_value>]"
     exit 1
 fi
 
@@ -33,6 +33,9 @@ MAX_BW=40
 
 # Default direction. If not provided, we assume "initial"
 DIRECTION="initial"
+
+# Default TX_PWR is set to 5 unless overridden.
+TX_PWR=5
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -75,6 +78,15 @@ while [ "$#" -gt 0 ]; do
             esac
             shift
             ;;
+        --tx_pwr)
+            shift
+            if [ -z "$1" ]; then
+                echo "Error: --tx_pwr requires a value."
+                exit 1
+            fi
+            TX_PWR="$1"
+            shift
+            ;;
         *)
             echo "Unknown argument: $1"
             exit 1
@@ -108,7 +120,7 @@ fi
 RESULT=$(bitrate_calculator.sh "$TARGET" "$fec_ratio" "$max_mcs" --cap "$CAP" --gi long --max_bw "$MAX_BW")
 if [ $? -ne 0 ]; then
     echo "Error: bitrate_calculator.sh failed. Setting fallback, please retry with a lower bitrate."
-    set_alink_bitrate.sh 2500 1 --max_bw $MAX_BW --direction decreased
+    set_bitrate.sh 3000 0 --max_bw 20
     exit 1
 fi
 
@@ -130,13 +142,17 @@ echo "   Selected settings: MCS=${candidate_mcs}, BW=${candidate_bw} MHz, GI=${c
 echo "   Bitrate cap: ${CAP} kbps"
 echo "   Allowed max BW: ${max_bw_allowed} MHz"
 echo "   Update direction: ${DIRECTION}"
+echo "   Transmitter Power: ${TX_PWR}"
+
 
 # --- Execute update blocks based on --direction ---
 if [ "$DIRECTION" = "decreased" ]; then
     # If "decreased", update Majestic Online first
     ## --- Update Majestic Online ---
     curl -s localhost/api/v1/set?video0.bitrate=$TARGET 2> /dev/null
-    #sleep 0.1
+    sleep 1
+    
+    
     # Then update WFB_NG Online
     # --- Update WFB_NG Online ---
     wfb_tx_cmd 8000 set_radio -B ${candidate_bw} -G ${candidate_gi} \
@@ -144,7 +160,17 @@ if [ "$DIRECTION" = "decreased" ]; then
       -L $(yaml-cli -i /etc/wfb.yaml -g .broadcast.ldpc_tx) \
       -M ${candidate_mcs}
     wfb_tx_cmd 8000 set_fec -k ${fec_k} -n ${fec_n}
+    
+    # --- Set transmitter power ---
+    echo "Setting transmitter power to ${TX_PWR}."
+    set_alink_tx_pwr.sh "$TX_PWR" --mcs $candidate_mcs
+    
 else
+
+    # --- Set transmitter power ---
+    echo "Setting transmitter power to ${TX_PWR}."
+    set_alink_tx_pwr.sh "$TX_PWR" --mcs $candidate_mcs
+    
     # Otherwise, update WFB_NG Online first
     # --- Update WFB_NG Online ---
     wfb_tx_cmd 8000 set_radio -B ${candidate_bw} -G ${candidate_gi} \
@@ -152,7 +178,7 @@ else
       -L $(yaml-cli -i /etc/wfb.yaml -g .broadcast.ldpc_tx) \
       -M ${candidate_mcs}
     wfb_tx_cmd 8000 set_fec -k ${fec_k} -n ${fec_n}
-    #sleep 0.2
+    sleep 0.2
     ## --- Update Majestic Online ---
     curl -s localhost/api/v1/set?video0.bitrate=$TARGET 2> /dev/null
 fi
