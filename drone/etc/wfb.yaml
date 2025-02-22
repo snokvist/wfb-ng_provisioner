@@ -14,7 +14,7 @@ wireless:
   alink: disabled
   temperature_throttle: enable
   profile: vipers_profile
-  broadcast_redundancy: auto
+  broadcast_redundancy: disabled
 broadcast:
   mcs_index: 2
   fec_k: 8
