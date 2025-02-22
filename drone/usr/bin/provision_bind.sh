@@ -58,5 +58,5 @@ wfb_tx -p 127 -u 5801 -K /etc/bind.key -M 1 -S 0 -L 0 \
 wfb_tun -a 10.5.99.2/24 &
 
 # Sleep needed for wfb_tun to initialize
-sleep 15
+sleep 8
 
