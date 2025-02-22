@@ -305,6 +305,13 @@
     }, 1000);
   }
 
+  // On page load, execute get_www_info.sh then load overall info
+  window.addEventListener('load', function() {
+    runCommand('get_www_info.sh')
+      .then(loadWwInfo)
+      .catch(loadWwInfo);
+  });
+
   // Load overall info from /tmp/www_info
   function loadWwInfo() {
     fetch('/tmp/www_info')
@@ -320,7 +327,6 @@
         document.getElementById('wwInfo').textContent = "VTX information not currently available ...";
       });
   }
-  loadWwInfo();
 
   // Bind with groundstation
   document.getElementById('bind-wfb-button').addEventListener('click', function() {
@@ -378,7 +384,7 @@
   // Reset VTX with confirmation
   document.getElementById('reset-button').addEventListener('click', function() {
     if (confirm("This action will factory reset the VTX. Make sure the unit is powered during the next 2 minutes.")) {
-      executeDelay(this, 'firstboot.sh');
+      executeDelay(this, 'wifibroadcast reset');
     }
   });
 
