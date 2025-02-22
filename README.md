@@ -11,7 +11,7 @@
 - Prepared for community presets/profiles parsing.
 - Automatic bitrate negotiation. decide the bitrate you want to have, and GI,MCS,BW will be automatically selected to fit the channel. Priority order BW>MCS>GI. Capped at 20mbps per default. Fallback if invalid bitrate requested is mcs0 3000bitrate 20mhz long.
 - Automatic temperature throttling (scroll down to see limits and actions)
-- Simple-alink prototype
+- prepared alink startup scripts
 
 ## Groundstation
 - Setup wfb-ng to use/listen channel 165, until the full openipc-bind is implemented by wfb-ng.
