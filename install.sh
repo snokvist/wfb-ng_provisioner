@@ -8,8 +8,8 @@ chmod -R +x drone/usr/bin*
 chmod -R +x drone/etc/init.d/*
 
 echo "Starting scp ..."
-SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r /etc/gs.key root@$IP:/etc/drone.key 2>&1 | grep -v debug1
-SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r drone/* root@$IP:/ 2>&1 | grep -v debug1
+SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r -p /etc/gs.key root@$IP:/etc/drone.key 2>&1 | grep -v debug1
+SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r -p drone/* root@$IP:/ 2>&1 | grep -v debug1
 
 echo "Scp completed ... rebooting ... wait for reconnect..."
 SSHPASS="12345" sshpass -e ssh -o StrictHostKeyChecking=no -t root@$IP 'reboot' 2>&1 | grep -v debug1
