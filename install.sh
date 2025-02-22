@@ -14,9 +14,9 @@ SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r drone/* root
 echo "Scp completed ... rebooting ... wait for reconnect..."
 SSHPASS="12345" sshpass -e ssh -o StrictHostKeyChecking=no -t root@$IP 'reboot' 2>&1 | grep -v debug1
 
-echo "Reconnecting in 20s..."
+echo "Reconnecting in 25s..."
 # Visual countdown using a loop and printf
-for i in $(seq 20 -1 1); do
+for i in $(seq 25 -1 1); do
     printf "\r%d seconds remaining..." "$i"
     sleep 1
 done
