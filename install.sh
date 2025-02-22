@@ -1,17 +1,25 @@
 #!/bin/sh
 
+# Use the first argument as IP if supplied, otherwise default to 192.168.1.232
+IP="${1:-192.168.1.232}"
 
-echo "chmmod +x on relevant files ..."
+echo "chmod +x on relevant files ..."
 chmod +x drone/usr/bin*
 chmod +x drone/etc/init.d/*
 
 echo "Starting scp ..."
-SSHPASS="12345" sshpass -e  scp -O -v -r /etc/gs.key root@192.168.1.232:/etc/drone.key 2>&1 | grep -v debug1
-SSHPASS="12345" sshpass -e  scp -O -v -r drone/* root@192.168.1.232:/ 2>&1 | grep -v debug1
+SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r /etc/gs.key root@$IP:/etc/drone.key 2>&1 | grep -v debug1
+SSHPASS="12345" sshpass -e scp -o StrictHostKeyChecking=no -O -v -r drone/* root@$IP:/ 2>&1 | grep -v debug1
 
+echo "Scp completed ... rebooting ... wait for reconnect..."
+SSHPASS="12345" sshpass -e ssh -o StrictHostKeyChecking=no -t root@$IP 'reboot' 2>&1 | grep -v debug1
 
-echo "Scp completed ... rebooting ... wait for reconnect... "
-SSHPASS="12345" sshpass -e ssh -t root@192.168.1.232 'reboot' 2>&1 | grep -v debug1
-sleep 8
-echo "Reconnecting ..."
-SSHPASS="12345" sshpass -e ssh root@192.168.1.232
+echo "Reconnecting in 20s..."
+# Visual countdown using a loop and printf
+for i in $(seq 20 -1 1); do
+    printf "\r%d seconds remaining..." "$i"
+    sleep 1
+done
+echo ""
+
+SSHPASS="12345" sshpass -e ssh -o StrictHostKeyChecking=no root@$IP
