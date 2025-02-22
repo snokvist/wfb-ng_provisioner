@@ -384,7 +384,7 @@
   // Reset VTX with confirmation
   document.getElementById('reset-button').addEventListener('click', function() {
     if (confirm("This action will factory reset the VTX. Make sure the unit is powered during the next 2 minutes.")) {
-      executeDelay(this, 'wifibroadcast reset');
+      executeDelay(this, 'firstboot.sh');
     }
   });
 
