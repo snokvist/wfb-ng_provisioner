@@ -2,6 +2,8 @@
 
 # Use the first argument as IP if supplied, otherwise default to 192.168.1.232
 IP="${1:-192.168.1.232}"
+ssh-keygen -f '/home/radxa/.ssh/known_hosts' -R $IP
+
 
 echo "chmod +x on relevant files ..."
 chmod -R +x drone/usr/bin*
