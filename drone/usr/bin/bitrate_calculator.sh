@@ -129,36 +129,36 @@ compute_final() {
             case "$mcs" in
                 0) base=6500 ;;
                 1) base=12000 ;;
-                2) base=17500 ;;
-                3) base=22000 ;;
-                4) base=30000 ;;
-                5) base=47000 ;;
-                6) base=53500 ;;
-                7) base=60000 ;;
+                2) base=15500 ;;
+                3) base=20000 ;;
+                4) base=25000 ;;
+                5) base=42000 ;;
+                6) base=47500 ;;
+                7) base=55000 ;;
             esac
         else
             case "$mcs" in
                 0) base=7200 ;;
                 1) base=13400 ;;
-                2) base=19700 ;;
-                3) base=23900 ;;
-                4) base=33300 ;;
-                5) base=49800 ;;
-                6) base=55000 ;;
-                7) base=60200 ;;
+                2) base=18700 ;;
+                3) base=21900 ;;
+                4) base=28300 ;;
+                5) base=43800 ;;
+                6) base=50000 ;;
+                7) base=55200 ;;
             esac
         fi
     elif [ "$bw" -eq 40 ]; then
         if [ "$gi" = "long" ]; then
             case "$mcs" in
-                0) base=10800 ;;
-                1) base=21600 ;;
-                2) base=32400 ;;
-                3) base=43200 ;;
-                4) base=64800 ;;
-                5) base=86400 ;;
-                6) base=97200 ;;
-                7) base=108000 ;;
+                0) base=9800 ;;
+                1) base=18600 ;;
+                2) base=30400 ;;
+                3) base=40200 ;;
+                4) base=55800 ;;
+                5) base=80400 ;;
+                6) base=90200 ;;
+                7) base=97000 ;;
             esac
         else
             case "$mcs" in
@@ -166,10 +166,10 @@ compute_final() {
                 1) base=24000 ;;
                 2) base=36000 ;;
                 3) base=48000 ;;
-                4) base=72000 ;;
-                5) base=96000 ;;
-                6) base=108000 ;;
-                7) base=120000 ;;
+                4) base=60000 ;;
+                5) base=91000 ;;
+                6) base=980000 ;;
+                7) base=100000 ;;
             esac
         fi
     else
