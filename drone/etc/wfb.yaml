@@ -26,6 +26,15 @@ broadcast:
   stbc: 0
   guard_interval: short
 tunnel:
+  enabled: true
+  mcs_index: 1
+  fec_k: 1
+  fec_n: 2
+  force_vht: false
+  ldpc: 0
+  stbc: 0
+android_tunnel:
+  enabled: true
   mcs_index: 1
   fec_k: 1
   fec_n: 2
