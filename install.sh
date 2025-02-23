@@ -4,6 +4,8 @@
 IP="${1:-192.168.1.232}"
 ssh-keygen -f '/home/radxa/.ssh/known_hosts' -R $IP
 
+echo "Copying gs.key with passphrase "openipc" to /etc/"
+sudo cp gs/gs.key /etc/gs.key
 
 echo "chmod +x on relevant files ..."
 chmod -R +x drone/usr/bin*
