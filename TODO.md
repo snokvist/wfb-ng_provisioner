@@ -9,3 +9,4 @@ List of binded drones with ip numbers at gs?
 
 echo -e "COMMAND\t1\tENABLE" | socket_srv --udp_send 5557 127.0.0.1
 
+Integrate wifi indexes 0-10 in all scripts
