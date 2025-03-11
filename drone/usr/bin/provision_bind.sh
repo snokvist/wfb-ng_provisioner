@@ -51,11 +51,17 @@ then
         | base64 -d > /etc/bind.key
 fi
 
-echo "- Starting wfb_rx, wfb_tx, wfb_tun"
+echo "- Starting wfb_rx, wfb_tx, wfb_tun for bind"
 wfb_rx -p 255 -u 5800 -K /etc/bind.key -i 10531917 wlan0 &> /dev/null &
 wfb_tx -p 127 -u 5801 -K /etc/bind.key -M 1 -S 0 -L 0 \
     -k 1 -n 2 -i 10531917 wlan0 &> /dev/null &
 wfb_tun -a 10.5.99.2/24 &
+
+echo "- Starting primary wfb_tun"
+wfb_rx -p 160 -u 5800 -K /etc/drone.key -i 7669206 wlan0 &> /dev/null &
+wfb_tx -p 32 -u 5801 -K /etc/drone.key -M 1 -S 0 -L 0 \
+    -k 1 -n 2 -i 7669206 wlan0 &> /dev/null &
+wfb_tun -a 10.5.0.10/24 > /dev/null &
 
 # Sleep needed for wfb_tun to initialize
 sleep 8
