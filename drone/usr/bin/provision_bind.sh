@@ -63,6 +63,6 @@ wfb_tx -p 32 -u 5801 -K /etc/drone.key -M 1 -S 0 -L 0 \
     -k 1 -n 2 -i 7669206 wlan0 &> /dev/null &
 wfb_tun -a 10.5.0.10/24 > /dev/null &
 
-# Sleep needed for wfb_tun to initialize
-sleep 8
+# Sleep needed for wfb_tun to initialize, time to connect to bind / fallback channel
+sleep 25
 
