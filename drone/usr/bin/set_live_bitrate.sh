@@ -163,13 +163,13 @@ if [ "$DIRECTION" = "decreased" ]; then
     
     # --- Set transmitter power ---
     echo "Setting transmitter power to ${TX_PWR}."
-    set_alink_tx_pwr.sh "$TX_PWR" --mcs $candidate_mcs
+    set_live_tx_pwr.sh "$TX_PWR" --mcs $candidate_mcs
     
 else
 
     # --- Set transmitter power ---
     echo "Setting transmitter power to ${TX_PWR}."
-    set_alink_tx_pwr.sh "$TX_PWR" --mcs $candidate_mcs
+    set_live_tx_pwr.sh "$TX_PWR" --mcs $candidate_mcs
     
     # Otherwise, update WFB_NG Online first
     # --- Update WFB_NG Online ---
