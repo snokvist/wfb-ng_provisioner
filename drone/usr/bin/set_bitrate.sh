@@ -154,6 +154,8 @@ if [ "$max_bw_allowed" -eq 40 ]; then
 else
     mode="HT${candidate_bw}"
 fi
+#set low tx pwr to svoid mcs overload.
+set_live_tx_pwr.sh 1 --mcs $candidate_mcs
 
 yaml-cli -i /etc/wfb.yaml -s .wireless.mode "$mode" > /dev/null
 yaml-cli -i /etc/wfb.yaml -s .broadcast.bw "$candidate_bw" > /dev/null
